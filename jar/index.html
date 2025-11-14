@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wind Balance Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        canvas {
+            border: 2px solid #000;
+            background: #ffffff;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game state
+        let gameState = 'playing'; // 'playing', 'falling', 'broken', 'gameOver'
+        let score = 0;
+        let frameCount = 0;
+        let breakAnimationFrame = 0;
+        let gameOverMessage = '';
+        let startupGracePeriod = 120; // 2 seconds of no wind at start (60fps * 2)
+        let gracePeriodActive = true;
+        let currentLevel = 0; // Which level we're on (0 = ground level)
+        let totalScore = 0; // Total score across all levels
+
+        // Level stacking system
+        const completedLevels = []; // Array of completed jar/table states
+        const LEVEL_SPACING = 180; // Vertical space between levels
+
+        // Camera system
+        let camera = {
+            x: 0,
+            y: 0,
+            targetX: 0,
+            zoom: 1.0,
+            targetZoom: 1.0
+        };
+
+        // Physics constants
+        const GRAVITY = 0.3;
+        const FALL_GRAVITY = 0.8;
+        const BASE_TABLE_HEIGHT = 380;
+        let TABLE_Y = BASE_TABLE_HEIGHT - (currentLevel * LEVEL_SPACING); // Adjusts for each level
+        const JAR_WIDTH = 70; // Wider for more ornate jar
+        const BASE_TABLE_WIDTH = JAR_WIDTH * 2; // Starting table width (2x jar width for forgiveness)
+        const TABLE_WIDTH_PER_NOTCH = 15; // Pixels added per 10 points
+        let TABLE_WIDTH = BASE_TABLE_WIDTH; // Current table width (expands with score)
+
+        // Initial random offset for table position in world space
+        const initialRandomOffset = (Math.random() - 0.5) * 200;
+        let TABLE_X = (canvas.width / 2 - TABLE_WIDTH / 2) + initialRandomOffset;
+
+        const FRICTION = 0.90; // Higher friction = slower base movement
+        const ANGULAR_FRICTION = 0.98; // Higher = slower angular changes (easier to recover)
+
+        // Generate a random ornate jar design
+        function generateRandomJar() {
+            const decorChars = ['~', '*', 'o', '+', 'X', '@', '#', '%', '&', '^'];
+            const pairChars = ['{', '}', '<', '>', '(', ')', '[', ']'];
+
+            function randDec() { return decorChars[Math.floor(Math.random() * decorChars.length)]; }
+            function randPair() { return pairChars[Math.floor(Math.random() * pairChars.length)]; }
+
+            // Generate unique baroque pattern for each jar
+            const d1 = randDec(), d2 = randDec(), d3 = randDec(), d4 = randDec(), d5 = randDec();
+            const p1 = randPair(), p2 = randPair(), p3 = randPair(), p4 = randPair();
+
+            return [
+                [' ', ' ', ' ', '_', '_', '_', '_', '_', ' ', ' ', ' '],
+                [' ', ' ', '(', '=', '=', '=', '=', '=', ')', ' ', ' '],
+                [' ', ' ', '|', d1, d1, d1, d1, d1, '|', ' ', ' '],
+                [' ', ' ', '|', ' ', p1, d2, p2, ' ', '|', ' ', ' '],
+                [' ', ' ', '|', d1, d1, d1, d1, d1, '|', ' ', ' '],
+                [' ', '/', ' ', d3, ' ', d3, ' ', d3, ' ', '\\', ' '],
+                [' ', '|', ' ', ' ', d2, ' ', d2, ' ', ' ', '|', ' '],
+                [' ', '|', ' ', p3, p4, p3, p4, ' ', ' ', '|', ' '],
+                [' ', '|', ' ', ' ', d4, ' ', d4, ' ', ' ', '|', ' '],
+                [' ', '|', ' ', p1, ' ', d3, ' ', p2, ' ', '|', ' '],
+                [' ', '\\', ' ', d2, ' ', d2, ' ', d2, ' ', '/', ' '],
+                [' ', ' ', '|', ' ', d1, d1, d1, ' ', '|', ' ', ' '],
+                [' ', ' ', '|', d3, ' ', d2, ' ', d3, '|', ' ', ' '],
+                [' ', ' ', '|', ' ', p1, d5, p2, ' ', '|', ' ', ' '],
+                [' ', ' ', '|', d3, ' ', d2, ' ', d3, '|', ' ', ' '],
+                [' ', ' ', '|', ' ', d1, d1, d1, ' ', '|', ' ', ' '],
+                [' ', '/', ' ', d2, ' ', d2, ' ', d2, ' ', '\\', ' '],
+                [' ', '|', ' ', p3, p4, p3, p4, ' ', ' ', '|', ' '],
+                [' ', '|', ' ', ' ', d4, ' ', d4, ' ', ' ', '|', ' '],
+                [' ', '|', ' ', p1, ' ', d3, ' ', p2, ' ', '|', ' '],
+                [' ', '\\', ' ', d3, ' ', d3, ' ', d3, ' ', '/', ' '],
+                [' ', ' ', '|', d1, d1, d1, d1, d1, '|', ' ', ' '],
+                [' ', ' ', '|', ' ', p1, d2, p2, ' ', '|', ' ', ' '],
+                [' ', ' ', '|', '_', '_', '_', '_', '_', '|', ' ', ' '],
+                [' ', ' ', '/', '_', '=', '=', '=', '_', '\\', ' ', ' ']
+            ];
+        }
+
+        // Pot/Jar object - always centered on table
+        const pot = {
+            x: TABLE_X + TABLE_WIDTH / 2, // Centered on table
+            y: TABLE_Y - 80,
+            width: JAR_WIDTH,
+            height: 120,
+            angle: 0,
+            velocityX: 0,
+            velocityY: 0,
+            angularVelocity: 0,
+            mass: 10,
+            baseY: TABLE_Y - 80,
+            onTable: true,
+            design: generateRandomJar() // Unique jar design
+        };
+
+        // Wind properties
+        const wind = {
+            force: 0,
+            targetForce: 0,
+            direction: 1,
+            changeTimer: 0,
+            changeInterval: 300, // Start with longer interval
+            nextForce: 0, // Preview of next wind force
+            nextDirection: 1 // Preview of next wind direction
+        };
+
+        // Keyboard controls
+        const keys = {
+            left: false,
+            right: false,
+            space: false,
+            e: false // For export
+        };
+
+        // Event listeners
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') {
+                keys.left = true;
+                e.preventDefault();
+            }
+            if (e.key === 'ArrowRight') {
+                keys.right = true;
+                e.preventDefault();
+            }
+            if (e.key === ' ') {
+                keys.space = true;
+                e.preventDefault();
+            }
+            if (e.key === 'e' || e.key === 'E') {
+                keys.e = true;
+                e.preventDefault();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft') keys.left = false;
+            if (e.key === 'ArrowRight') keys.right = false;
+            if (e.key === ' ') keys.space = false;
+            if (e.key === 'e' || e.key === 'E') keys.e = false;
+        });
+
+        // Camera functions
+        function updateCamera() {
+            // Calculate target zoom to fit all levels
+            const totalHeight = (currentLevel + 1) * LEVEL_SPACING + 300;
+            camera.targetZoom = Math.min(1.0, canvas.height / totalHeight);
+
+            // Smooth zoom interpolation
+            camera.zoom += (camera.targetZoom - camera.zoom) * 0.1;
+
+            // Center camera on the current jar horizontally
+            camera.targetX = (canvas.width / 2) - (pot.x * camera.zoom);
+            camera.x += (camera.targetX - camera.x) * 0.1;
+
+            // Position camera to show entire stack, weighted toward bottom
+            // This keeps the base visible and brings the stack lower on screen
+            const stackBottom = BASE_TABLE_HEIGHT + 100; // Ground level
+            const stackTop = BASE_TABLE_HEIGHT - (currentLevel * LEVEL_SPACING) - 100; // Top of highest jar
+            const stackHeight = stackBottom - stackTop;
+            const stackCenter = stackTop + stackHeight / 3; // Weight toward bottom (1/3 from top)
+
+            camera.y = (canvas.height * 0.6) - (stackCenter * camera.zoom); // Position at 60% down the screen
+        }
+
+        function applyCameraTransform() {
+            ctx.save();
+            ctx.translate(camera.x, camera.y);
+            ctx.scale(camera.zoom, camera.zoom);
+        }
+
+        function resetCameraTransform() {
+            ctx.restore();
+        }
+
+        // Level advancement
+        function advanceToNextLevel() {
+            // Save current jar state (in world space)
+            completedLevels.push({
+                x: pot.x,
+                y: pot.y,
+                angle: pot.angle,
+                tableX: TABLE_X,
+                tableWidth: TABLE_WIDTH,
+                tableY: TABLE_Y,
+                level: currentLevel,
+                design: pot.design // Save the jar's unique design
+            });
+
+            // Move to next level
+            currentLevel++;
+            totalScore += score;
+
+            // Reset for new level
+            score = 0;
+            frameCount = 0;
+            TABLE_Y = BASE_TABLE_HEIGHT - (currentLevel * LEVEL_SPACING);
+            TABLE_WIDTH = BASE_TABLE_WIDTH;
+
+            // Random horizontal offset for table in world space
+            const randomOffset = (Math.random() - 0.5) * 200;
+            TABLE_X = (canvas.width / 2 - TABLE_WIDTH / 2) + randomOffset;
+
+            // Position jar centered on the table
+            pot.x = TABLE_X + TABLE_WIDTH / 2;
+            pot.y = TABLE_Y - 80;
+            pot.angle = 0;
+            pot.velocityX = 0;
+            pot.velocityY = 0;
+            pot.angularVelocity = 0;
+            pot.design = generateRandomJar(); // Generate new unique jar design
+
+            // Reset wind with 2-second grace period for new jar
+            startupGracePeriod = 120; // 2 seconds at 60fps
+            gracePeriodActive = true;
+            wind.force = 0;
+            wind.targetForce = 0;
+            wind.changeTimer = 0;
+        }
+
+        // Draw text helper
+        function drawText(text, x, y, size = 12, align = 'left') {
+            ctx.font = `${size}px monospace`;
+            ctx.fillStyle = '#000000';
+            ctx.textAlign = align;
+            ctx.fillText(text, x, y);
+        }
+
+        // Draw UI elements
+        function drawUI() {
+            // Title - ASCII art "JAR"
+            const titleY = 25;
+            drawText('     __    ___    ____  ', canvas.width / 2, titleY, 12, 'center');
+            drawText('    / /\\  / _ \\  | __ \\ ', canvas.width / 2, titleY + 10, 12, 'center');
+            drawText('   / /  \\/ /_\\ \\ | |/ / ', canvas.width / 2, titleY + 20, 12, 'center');
+            drawText('  / / /\\  ___ / | |\\ \\ ', canvas.width / 2, titleY + 30, 12, 'center');
+            drawText(' /_/ /  \\_/   \\_\\|_| \\_\\', canvas.width / 2, titleY + 40, 12, 'center');
+
+            // Score and level info
+            const notches = Math.floor(score / 10);
+            drawText(`LEVEL: ${currentLevel + 1}`, 20, 30, 14);
+            drawText(`SCORE: ${score}/20`, 20, 50, 14);
+            drawText(`TOTAL: ${totalScore + score}`, 20, 70, 11);
+            if (notches > 0) {
+                drawText(`TABLE: +${notches}`, 20, 85, 10);
+            }
+
+            // Wind indicator (ASCII bar)
+            const windBarWidth = 20;
+            const windBarX = canvas.width - 150;
+            const windBarY = 20;
+
+            drawText('WIND:', windBarX - 50, windBarY + 10, 12);
+
+            // Wind bar border
+            ctx.strokeStyle = '#000';
+            ctx.strokeRect(windBarX, windBarY, 100, 15);
+
+            // Wind bar fill (ASCII)
+            const fillWidth = Math.floor(wind.force * 100);
+            for (let i = 0; i < fillWidth; i += 8) {
+                drawText('|', windBarX + i + 2, windBarY + 11, 10);
+            }
+
+            // Wind direction arrow
+            const arrow = wind.direction > 0 ? '>>>' : '<<<';
+            drawText(arrow, windBarX + 110, windBarY + 10, 12);
+
+            // Countdown timer to next wind change
+            if (gameState === 'playing') {
+                if (gracePeriodActive) {
+                    const graceSecondsLeft = Math.ceil(startupGracePeriod / 60);
+                    drawText(`WIND STARTS IN: ${graceSecondsLeft}s`, canvas.width / 2, 80, 14, 'center');
+                } else {
+                    const framesUntilChange = wind.changeInterval - wind.changeTimer;
+                    const secondsUntilChange = Math.ceil(framesUntilChange / 60);
+                    drawText(`NEXT CHANGE: ${secondsUntilChange}s`, canvas.width / 2, 80, 12, 'center');
+
+                    // Show preview of next wind
+                    const nextArrow = wind.nextDirection > 0 ? '>>>' : '<<<';
+                    const forcePercent = Math.round(wind.nextForce * 100);
+                    drawText(`NEXT WIND: ${nextArrow} ${forcePercent}%`, canvas.width / 2, 95, 11, 'center');
+                }
+            }
+
+            // Instructions at bottom
+            if (gameState === 'playing') {
+                drawText('ARROW KEYS: BALANCE JAR  |  E: EXPORT IMAGE', canvas.width / 2, canvas.height - 20, 10, 'center');
+            } else if (gameState === 'gameOver') {
+                drawText('GAME OVER!', canvas.width / 2, canvas.height / 2 - 50, 24, 'center');
+                drawText(gameOverMessage, canvas.width / 2, canvas.height / 2 - 20, 14, 'center');
+                drawText(`LEVELS COMPLETED: ${currentLevel}`, canvas.width / 2, canvas.height / 2 + 5, 16, 'center');
+                drawText(`TOTAL SCORE: ${totalScore + score}`, canvas.width / 2, canvas.height / 2 + 30, 16, 'center');
+                drawText('PRESS SPACE TO RESTART  |  E: EXPORT IMAGE', canvas.width / 2, canvas.height / 2 + 60, 12, 'center');
+            }
+        }
+
+        // Draw background
+        function drawBackground() {
+            // Ground (drawn at world space, not affected by camera directly)
+            const groundY = BASE_TABLE_HEIGHT + 100;
+            for (let x = 0; x < canvas.width; x += 8) {
+                drawText('_', x, groundY, 8);
+            }
+            for (let x = 0; x < canvas.width; x += 8) {
+                drawText('=', x, groundY + 8, 8);
+            }
+        }
+
+        // Draw completed levels
+        function drawCompletedLevels() {
+            for (let level of completedLevels) {
+                // Draw table for this level
+                const charSize = 8;
+                ctx.font = `${charSize}px monospace`;
+                ctx.fillStyle = '#000000';
+
+                // Table top
+                for (let x = level.tableX; x < level.tableX + level.tableWidth; x += charSize) {
+                    ctx.fillText('_', x, level.tableY);
+                }
+
+                // Table edge
+                for (let x = level.tableX; x < level.tableX + level.tableWidth; x += charSize) {
+                    ctx.fillText('-', x, level.tableY + charSize);
+                }
+
+                // Table leg
+                const legX = level.tableX + level.tableWidth / 2 - charSize / 2;
+                const legEndY = level.level === 0 ? BASE_TABLE_HEIGHT + 90 : completedLevels[level.level - 1].tableY - 10;
+                for (let y = level.tableY + charSize * 2; y < legEndY; y += charSize) {
+                    ctx.fillText('|', legX, y);
+                }
+
+                // Draw jar at frozen position with its unique design
+                ctx.save();
+                ctx.translate(level.x, level.y);
+                ctx.rotate(level.angle);
+
+                const charSize2 = 5;
+                ctx.font = `${charSize2}px monospace`;
+
+                // Use the saved jar design
+                const startY = -60;
+                level.design.forEach((row, rowIndex) => {
+                    const y = startY + rowIndex * (120 / level.design.length);
+                    row.forEach((char, charIndex) => {
+                        const x = -row.length * charSize2 / 2 + charIndex * charSize2;
+                        ctx.fillText(char, x, y);
+                    });
+                });
+
+                ctx.restore();
+            }
+        }
+
+        // Draw table
+        function drawTable() {
+            const charSize = 8;
+            ctx.font = `${charSize}px monospace`;
+            ctx.fillStyle = '#000000';
+
+            // Table top - exactly jar width
+            for (let x = TABLE_X; x < TABLE_X + TABLE_WIDTH; x += charSize) {
+                drawText('_', x, TABLE_Y, charSize);
+            }
+
+            // Table edge
+            for (let x = TABLE_X; x < TABLE_X + TABLE_WIDTH; x += charSize) {
+                drawText('-', x, TABLE_Y + charSize, charSize);
+            }
+
+            // Single center leg (taller)
+            const legX = TABLE_X + TABLE_WIDTH / 2 - charSize / 2;
+            for (let y = TABLE_Y + charSize * 2; y < canvas.height - 50; y += charSize) {
+                drawText('|', legX, y, charSize);
+            }
+        }
+
+        // Draw pot/jar - Uses unique random design
+        function drawPot() {
+            ctx.save();
+            ctx.translate(pot.x, pot.y);
+            ctx.rotate(pot.angle);
+
+            const charSize = 5;
+            ctx.font = `${charSize}px monospace`;
+            ctx.fillStyle = '#000000';
+
+            // Draw pot with its unique design
+            const startY = -pot.height / 2;
+            pot.design.forEach((row, rowIndex) => {
+                const y = startY + rowIndex * (pot.height / pot.design.length);
+                row.forEach((char, charIndex) => {
+                    const x = -row.length * charSize / 2 + charIndex * charSize;
+                    ctx.fillText(char, x, y);
+                });
+            });
+
+            ctx.restore();
+        }
+
+        // Draw broken jar pieces
+        function drawBrokenJar() {
+            const charSize = 6;
+            ctx.font = `${charSize}px monospace`;
+            ctx.fillStyle = '#000000';
+
+            const groundY = canvas.height - 40;
+            const centerX = pot.x;
+
+            // Broken pieces spreading outward
+            const spreadAmount = breakAnimationFrame * 2;
+
+            // Left pieces
+            drawText('/', centerX - 30 - spreadAmount, groundY - 5, 10);
+            drawText('|', centerX - 20 - spreadAmount, groundY - 3, 10);
+            drawText('\\', centerX - 10 - spreadAmount, groundY - 2, 10);
+
+            // Center pieces
+            drawText('_', centerX - 5, groundY, 10);
+            drawText('o', centerX, groundY - 8, 10);
+            drawText('_', centerX + 5, groundY, 10);
+
+            // Right pieces
+            drawText('/', centerX + 10 + spreadAmount, groundY - 2, 10);
+            drawText('|', centerX + 20 + spreadAmount, groundY - 3, 10);
+            drawText('\\', centerX + 30 + spreadAmount, groundY - 5, 10);
+
+            // Debris
+            drawText('.', centerX - 25, groundY + 5, 8);
+            drawText('.', centerX + 25, groundY + 5, 8);
+            drawText('.', centerX - 15, groundY + 3, 8);
+            drawText('.', centerX + 15, groundY + 3, 8);
+        }
+
+        // Wind particle system
+        const windParticles = [];
+
+        function initWindParticles() {
+            windParticles.length = 0;
+            for (let i = 0; i < 60; i++) {
+                windParticles.push({
+                    x: (i % 10) * 80 + Math.random() * 50,
+                    y: Math.floor(i / 10) * 80 + Math.random() * 60 + 50,
+                    speed: 0,
+                    size: 8 + Math.random() * 8, // Varying sizes 8-16px
+                    opacity: 0.3 + Math.random() * 0.7, // Varying opacity
+                    phase: Math.random() * Math.PI * 2, // For pulsing animation
+                    wobble: Math.random() * 2 - 1 // Vertical wobble amount
+                });
+            }
+        }
+
+        function drawWind() {
+            const windStrength = Math.abs(wind.force);
+            const baseSpeed = 0.5 + windStrength * 2;
+
+            for (let i = 0; i < windParticles.length; i++) {
+                const particle = windParticles[i];
+
+                particle.speed = baseSpeed * wind.direction;
+                particle.x += particle.speed;
+
+                // Animate phase for pulsing effect
+                particle.phase += 0.05;
+                const pulse = Math.sin(particle.phase) * 0.3 + 0.7;
+
+                // Slight vertical wobble
+                particle.y += Math.sin(particle.phase * 0.5) * particle.wobble * 0.1;
+
+                if (wind.direction > 0 && particle.x > canvas.width + 20) {
+                    particle.x = -20;
+                    particle.y = Math.random() * (TABLE_Y - 100) + 50;
+                } else if (wind.direction < 0 && particle.x < -20) {
+                    particle.x = canvas.width + 20;
+                    particle.y = Math.random() * (TABLE_Y - 100) + 50;
+                }
+
+                // Draw with varying opacity and size
+                const currentSize = Math.floor(particle.size * pulse);
+                const alpha = Math.floor((particle.opacity * pulse) * 255);
+                const grayValue = Math.floor(50 + windStrength * 100); // Darker when wind is stronger
+
+                ctx.font = `${currentSize}px monospace`;
+                ctx.fillStyle = `rgba(${grayValue}, ${grayValue}, ${grayValue}, ${particle.opacity * pulse})`;
+                ctx.fillText('•', particle.x, particle.y);
+            }
+
+            // Reset to black for other drawing
+            ctx.fillStyle = '#000000';
+        }
+
+        // Generate next wind values
+        function generateNextWind() {
+            // Calculate next wind force: 0.3 to 0.6
+            wind.nextForce = Math.random() * 0.3 + 0.3;
+
+            // Direction changes less frequently - 30% chance to change
+            if (Math.random() < 0.3) {
+                wind.nextDirection = Math.random() > 0.5 ? 1 : -1;
+            }
+            // Otherwise keep current direction
+        }
+
+        // Update wind
+        function updateWind() {
+            // Handle startup grace period
+            if (gracePeriodActive) {
+                startupGracePeriod--;
+                if (startupGracePeriod <= 0) {
+                    gracePeriodActive = false;
+                    // Initialize first wind after grace period
+                    wind.targetForce = Math.random() * 0.3 + 0.3;
+                    wind.direction = Math.random() > 0.5 ? 1 : -1;
+                    wind.changeTimer = 0;
+                    // Generate preview of next wind
+                    wind.nextDirection = wind.direction;
+                    generateNextWind();
+                }
+                return; // Don't update wind during grace period
+            }
+
+            wind.changeTimer++;
+
+            if (wind.changeTimer >= wind.changeInterval) {
+                wind.changeTimer = 0;
+
+                // Apply the previewed wind values
+                wind.targetForce = wind.nextForce;
+                wind.direction = wind.nextDirection;
+
+                // Generate the NEXT wind change for preview
+                generateNextWind();
+
+                // Much longer intervals: 240-480 frames (4-8 seconds)
+                wind.changeInterval = 240 + Math.random() * 240;
+            }
+
+            // Gradual interpolation for smooth wind changes
+            wind.force += (wind.targetForce - wind.force) * 0.03;
+        }
+
+        // Apply physics
+        function updatePhysics() {
+            if (gameState === 'playing') {
+                // Wind affects tilt - gentler wind force
+                const windTorque = wind.force * wind.direction * 0.002;
+                pot.angularVelocity += windTorque;
+
+                // Player controls affect tilt
+                if (keys.left) {
+                    pot.angularVelocity -= 0.003;
+                }
+                if (keys.right) {
+                    pot.angularVelocity += 0.003;
+                }
+
+                // Apply friction
+                pot.angularVelocity *= ANGULAR_FRICTION;
+                pot.angle += pot.angularVelocity;
+
+                // When jar tilts, it naturally leans in that direction
+                // This creates realistic tipping behavior
+                const leanAmount = Math.sin(pot.angle) * 0.8;
+                pot.x += leanAmount;
+
+                // Calculate center of mass position when jar is tilted
+                // When jar tilts, its center of mass shifts horizontally
+                const centerOfMassX = pot.x + Math.sin(pot.angle) * (pot.height / 2);
+
+                // Check if angle is too extreme (past 140 degrees)
+                const MAX_TILT_ANGLE = (140 * Math.PI) / 180; // 140 degrees
+                if (Math.abs(pot.angle) > MAX_TILT_ANGLE) {
+                    // Tilted too far - jar tips over!
+                    gameState = 'falling';
+                    pot.onTable = false;
+                    pot.velocityX = Math.sign(pot.angle) * 3;
+                    return;
+                }
+
+                // Check if center of mass is beyond table edges (tipping point)
+                // Add buffer zone - center of mass must be significantly beyond edge to tip
+                const TIPPING_BUFFER = 20; // Pixels of forgiveness before tipping
+                const tableLeft = TABLE_X - TIPPING_BUFFER;
+                const tableRight = TABLE_X + TABLE_WIDTH + TIPPING_BUFFER;
+
+                if (centerOfMassX < tableLeft || centerOfMassX > tableRight) {
+                    // Center of mass is beyond table edge + buffer - jar tips over and falls!
+                    gameState = 'falling';
+                    pot.onTable = false;
+                    // Give it a slight push in the direction it's falling
+                    pot.velocityX = Math.sign(centerOfMassX - pot.x) * 2;
+                    return;
+                }
+
+                // Update score
+                score = Math.floor(frameCount / 60);
+
+                // Check if reached 20 points - advance to next level!
+                if (score >= 20) {
+                    advanceToNextLevel();
+                    return;
+                }
+
+                // Expand table width based on score (1 notch per 10 points)
+                const notches = Math.floor(score / 10);
+                TABLE_WIDTH = BASE_TABLE_WIDTH + (notches * TABLE_WIDTH_PER_NOTCH);
+
+                // Keep table centered under jar as it leans
+                TABLE_X = pot.x - TABLE_WIDTH / 2;
+            } else if (gameState === 'falling') {
+                // Jar is falling (table stays in place)
+                pot.velocityY += FALL_GRAVITY;
+                pot.y += pot.velocityY;
+                pot.angularVelocity += 0.02;
+                pot.angle += pot.angularVelocity;
+                pot.x += pot.velocityX * 0.95;
+
+                // Check if hit ground
+                const groundY = canvas.height - 40;
+                if (pot.y > groundY - pot.height / 2) {
+                    gameState = 'broken';
+                    breakAnimationFrame = 0;
+                }
+            } else if (gameState === 'broken') {
+                // Breaking animation
+                breakAnimationFrame++;
+                if (breakAnimationFrame > 60) {
+                    gameOver('JAR FELL AND BROKE!');
+                }
+            }
+        }
+
+        // Draw the world (without UI)
+        function drawWorld() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update and apply camera transform
+            updateCamera();
+            applyCameraTransform();
+
+            // Draw everything in world space
+            drawBackground();
+            drawWind();
+            drawCompletedLevels(); // Draw previous jars and tables
+            drawTable(); // Current level table
+
+            if (gameState === 'broken' || gameState === 'gameOver') {
+                drawBrokenJar();
+            } else {
+                drawPot(); // Current jar
+            }
+
+            // Reset camera transform
+            resetCameraTransform();
+        }
+
+        // Draw UI elements for export (title, score, wind meter only)
+        function drawUIForExport() {
+            // Title - ASCII art "JAR"
+            const titleY = 25;
+            drawText('     __    ___    ____  ', canvas.width / 2, titleY, 12, 'center');
+            drawText('    / /\\  / _ \\  | __ \\ ', canvas.width / 2, titleY + 10, 12, 'center');
+            drawText('   / /  \\/ /_\\ \\ | |/ / ', canvas.width / 2, titleY + 20, 12, 'center');
+            drawText('  / / /\\  ___ / | |\\ \\ ', canvas.width / 2, titleY + 30, 12, 'center');
+            drawText(' /_/ /  \\_/   \\_\\|_| \\_\\', canvas.width / 2, titleY + 40, 12, 'center');
+
+            // Score and level info
+            const notches = Math.floor(score / 10);
+            drawText(`LEVEL: ${currentLevel + 1}`, 20, 30, 14);
+            drawText(`SCORE: ${score}/20`, 20, 50, 14);
+            drawText(`TOTAL: ${totalScore + score}`, 20, 70, 11);
+            if (notches > 0) {
+                drawText(`TABLE: +${notches}`, 20, 85, 10);
+            }
+
+            // Wind indicator (ASCII bar)
+            const windBarWidth = 20;
+            const windBarX = canvas.width - 150;
+            const windBarY = 20;
+
+            drawText('WIND:', windBarX - 50, windBarY + 10, 12);
+
+            // Wind bar border
+            ctx.strokeStyle = '#000';
+            ctx.strokeRect(windBarX, windBarY, 100, 15);
+
+            // Wind bar fill (ASCII)
+            const fillWidth = Math.floor(wind.force * 100);
+            for (let i = 0; i < fillWidth; i += 8) {
+                drawText('|', windBarX + i + 2, windBarY + 11, 10);
+            }
+
+            // Wind direction arrow
+            const arrow = wind.direction > 0 ? '>>>' : '<<<';
+            drawText(arrow, windBarX + 110, windBarY + 10, 12);
+        }
+
+        // Export canvas as image (with title, score, and wind meter)
+        function exportImage() {
+            try {
+                // Draw world without UI
+                drawWorld();
+
+                // Draw selected UI elements for export
+                drawUIForExport();
+
+                // Convert canvas to data URL
+                const dataURL = canvas.toDataURL('image/png');
+
+                // Create download link
+                const link = document.createElement('a');
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                link.download = `wind-balance-tower-${timestamp}.png`;
+                link.href = dataURL;
+
+                // Trigger download
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (error) {
+                console.error('Error exporting image:', error);
+            }
+        }
+
+        // Game over
+        function gameOver(message) {
+            gameState = 'gameOver';
+            gameOverMessage = message;
+        }
+
+        // Restart game
+        function restartGame() {
+            gameState = 'playing';
+            score = 0;
+            totalScore = 0;
+            currentLevel = 0;
+            frameCount = 0;
+            breakAnimationFrame = 0;
+            completedLevels.length = 0; // Clear all completed levels
+
+            // Reset table position
+            TABLE_Y = BASE_TABLE_HEIGHT;
+            TABLE_WIDTH = BASE_TABLE_WIDTH;
+
+            // Random horizontal offset for table in world space
+            const randomOffset = (Math.random() - 0.5) * 200;
+            TABLE_X = (canvas.width / 2 - TABLE_WIDTH / 2) + randomOffset;
+
+            // Reset jar centered on table
+            pot.x = TABLE_X + TABLE_WIDTH / 2;
+            pot.y = TABLE_Y - 80;
+            pot.angle = 0;
+            pot.velocityX = 0;
+            pot.velocityY = 0;
+            pot.angularVelocity = 0;
+            pot.onTable = true;
+            pot.design = generateRandomJar(); // Generate new unique jar design
+
+            // Reset camera
+            camera.x = 0;
+            camera.y = 0;
+            camera.targetX = 0;
+            camera.zoom = 1.0;
+            camera.targetZoom = 1.0;
+
+            // Reset grace period and wind
+            startupGracePeriod = 120; // 2 seconds
+            gracePeriodActive = true;
+            wind.force = 0;
+            wind.targetForce = 0;
+            wind.direction = 1;
+            wind.changeTimer = 0;
+            wind.changeInterval = 300;
+            wind.nextForce = 0;
+            wind.nextDirection = 1;
+            initWindParticles();
+        }
+
+        // Main game loop
+        function gameLoop() {
+            // Draw world
+            drawWorld();
+
+            // Draw UI in screen space (not affected by camera)
+            drawUI();
+
+            // Handle export key (works anytime)
+            if (keys.e) {
+                exportImage();
+                keys.e = false; // Reset to prevent multiple exports
+            }
+
+            // Update game state
+            if (gameState !== 'gameOver') {
+                updateWind();
+                updatePhysics();
+                if (gameState === 'playing') {
+                    frameCount++;
+                }
+            } else {
+                // Check for restart
+                if (keys.space) {
+                    restartGame();
+                }
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start the game
+        initWindParticles();
+        gameLoop();
+    </script>
+</body>
+</html>
