@@ -33,15 +33,17 @@
             left: 50%;
             transform: translate(-50%, -50%);
             z-index: 10;
+            max-width: 95vw;
+            max-height: 95vh;
         }
-        
+
         #game {
             background: rgba(255,255,255,0.95);
             border: 6px solid black;
             padding: 20px;
             box-shadow: 0 0 50px black;
         }
-        
+
         #board {
             font-size: 16px;
             line-height: 1.25;
@@ -50,13 +52,64 @@
             font-weight: bold;
             background: white;
         }
-        
+
         #info {
             margin-top: 15px;
             font-size: 14px;
             border-top: 4px solid black;
             padding-top: 10px;
             font-weight: bold;
+        }
+
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            #game {
+                padding: 10px;
+                border: 3px solid black;
+                transform: scale(0.85);
+                transform-origin: center;
+            }
+
+            #board {
+                font-size: 10px;
+                line-height: 1.2;
+            }
+
+            #info {
+                font-size: 10px;
+                margin-top: 8px;
+                padding-top: 6px;
+                border-top: 2px solid black;
+            }
+        }
+
+        @media (max-width: 480px) {
+            #game {
+                padding: 8px;
+                border: 2px solid black;
+                transform: scale(0.7);
+            }
+
+            #board {
+                font-size: 8px;
+                line-height: 1.15;
+            }
+
+            #info {
+                font-size: 8px;
+                margin-top: 6px;
+                padding-top: 4px;
+            }
+        }
+
+        @media (max-width: 380px) {
+            #game {
+                transform: scale(0.6);
+            }
+
+            #board {
+                font-size: 7px;
+            }
         }
     </style>
 </head>
@@ -68,9 +121,9 @@
             <pre id="board"></pre>
             <div id="info">
                 <div>Score: <span id="score">0</span></div>
-                <div>Status: <span id="status">Press SPACE to start</span></div>
-                <div>Controls: Arrow Keys = Move, R = Restart, SPACE = Start</div>
-                <div>Mobile: Tap screen quadrants to control direction</div>
+                <div>Status: <span id="status">Tap to start / Press SPACE</span></div>
+                <div>Desktop: Arrow Keys = Move, R = Restart, SPACE = Start</div>
+                <div>Mobile: Tap to start, then tap screen edges to move snake</div>
             </div>
         </div>
     </div>
@@ -223,10 +276,10 @@
             
             document.getElementById('board').textContent = output;
             document.getElementById('score').textContent = score;
-            document.getElementById('status').textContent = 
-                over ? 'GAME OVER! Press R' : 
-                running ? 'Playing...' : 
-                'Press SPACE to start';
+            document.getElementById('status').textContent =
+                over ? 'GAME OVER! Tap or press R to restart' :
+                running ? 'Playing...' :
+                'Tap to start / Press SPACE';
         }
         
         function newFood() {
