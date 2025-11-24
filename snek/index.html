@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ASCII Snake - CHAOS MODE</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: white;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+        }
+        
+        #background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            font-size: 10px;
+            line-height: 1.0;
+            color: #888;
+            white-space: pre;
+            z-index: 1;
+            letter-spacing: 0;
+        }
+        
+        #game-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+        
+        #game {
+            background: rgba(255,255,255,0.95);
+            border: 6px solid black;
+            padding: 20px;
+            box-shadow: 0 0 50px black;
+        }
+        
+        #board {
+            font-size: 16px;
+            line-height: 1.25;
+            color: black;
+            white-space: pre;
+            font-weight: bold;
+            background: white;
+        }
+        
+        #info {
+            margin-top: 15px;
+            font-size: 14px;
+            border-top: 4px solid black;
+            padding-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <pre id="background"></pre>
+    
+    <div id="game-container">
+        <div id="game">
+            <pre id="board"></pre>
+            <div id="info">
+                <div>Score: <span id="score">0</span></div>
+                <div>Status: <span id="status">Press SPACE to start</span></div>
+                <div>Controls: Arrow Keys = Move, R = Restart, SPACE = Start</div>
+                <div>Mobile: Tap screen quadrants to control direction</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const W = 45;
+        const H = 20;
+        
+        // Background size
+        const BG_W = Math.ceil(window.innerWidth / 6) + 10;
+        const BG_H = Math.ceil(window.innerHeight / 10) + 10;
+        
+        let snake = [[10, 22], [10, 21], [10, 20]];
+        let dir = [0, 1];
+        let food = [10, 35];
+        let score = 0;
+        let running = false;
+        let over = false;
+        let nextDir = [0, 1];
+        let frame = 0;
+        let bgX = 0;
+        let bgY = 0;
+        
+        // MASSIVE character set for background
+        const bgChars = [
+            // Blocks
+            '█','▓','▒','░','▀','▄','▌','▐','▆','▇','▅','▃','▂','▁',
+            '■','□','▪','▫','▬','▭','▮','▯',
+            // Circles
+            '●','○','◉','◌','◍','◎','◐','◑','◒','◓','◔','◕',
+            '◖','◗','◘','◙','◚','◛','◦','◧','◨','◩','◪','◫',
+            // Stars
+            '★','☆','✦','✧','✩','✪','✫','✬','✭','✮','✯',
+            '✰','✱','✲','✳','✴','✵','✶','✷','✸','✹','✺',
+            // Shapes
+            '◢','◣','◤','◥','◬','◭','◮','▲','△','▶','▷','▼','▽','◀','◁',
+            // Math
+            '÷','×','±','∓','∔','∕','∖','∗','∘','∙','√','∞',
+            '∟','∠','∡','∧','∨','∩','∪','⊕','⊖','⊗','⊘','⊙','⊚','⊛',
+            // Dots
+            '·','˙','`','.','°','˚','¨','^','~','∙','∘','⋅','⋆','•',
+            // Lines
+            '|','/','\\','_','¦','‖','-','=','+','←','↑','→','↓','↔','↕',
+            // Special
+            '@','#','$','%','&','*','!','?','§','¶','†','‡','※',
+            // Numbers
+            '0','1','2','3','4','5','6','7','8','9',
+            // Letters
+            'a','b','c','d','e','f','g','h','i','j','k','l','m',
+            'n','o','p','q','r','s','t','u','v','w','x','y','z',
+            'A','B','C','D','E','F','G','H','I','J','K','L','M',
+            'N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
+            // Greek
+            'α','β','γ','δ','ε','ζ','η','θ','λ','μ','π','σ','φ','ψ','ω',
+            'Γ','Δ','Θ','Λ','Ξ','Π','Σ','Φ','Ψ','Ω',
+            // More symbols
+            '☼','☽','☾','♠','♣','♥','♦','♀','♂','☺','☻',
+            '¤','¬','²','³','¼','½','¾','«','»'
+        ];
+        
+        // Game characters
+        const borders = ['█','▓','▒','░','■','□','#','@','%','&','$','*'];
+        const heads = ['@','◉','●','◈','◆','⬤','◯','⊙'];
+        const bodies = ['8','O','o','°','◦','○','◌','◍'];
+        const foods = ['*','★','☆','✦','✧','◆','♦'];
+        const gameBg = ['░','▒','·','˙','.','°','`',','];
+        
+        function drawBackground() {
+            let output = '';
+            
+            for (let y = 0; y < BG_H; y++) {
+                for (let x = 0; x < BG_W; x++) {
+                    let px = x + bgX;
+                    let py = y + bgY;
+                    
+                    // Multiple animation layers
+                    let wave1 = Math.floor(Math.sin((px + frame * 0.3) * 0.5) * 30);
+                    let wave2 = Math.floor(Math.cos((py + frame * 0.2) * 0.4) * 30);
+                    let wave3 = Math.floor(Math.sin((px + py + frame * 0.15) * 0.3) * 30);
+                    
+                    let diag1 = (px + py + frame * 2);
+                    let diag2 = (px - py + frame * 3);
+                    
+                    let rand1 = (px * 73 + py * 137 + frame * 7);
+                    let rand2 = (px * 127 + py * 89 + frame * 13);
+                    
+                    let idx = Math.abs(wave1 + wave2 + wave3 + diag1 + diag2 + rand1 + rand2) % bgChars.length;
+                    
+                    // Extra variations
+                    if ((px + frame) % 5 === 0) idx = (idx + 50) % bgChars.length;
+                    if ((py + frame * 2) % 7 === 0) idx = (idx + 100) % bgChars.length;
+                    if ((px + py + frame) % 9 === 0) idx = (idx + 150) % bgChars.length;
+                    
+                    output += bgChars[idx];
+                }
+                output += '\n';
+            }
+            
+            document.getElementById('background').textContent = output;
+            
+            // Scroll background
+            bgX += 1.0;
+            bgY += 0.6;
+            if (bgX > 5000) bgX = 0;
+            if (bgY > 5000) bgY = 0;
+        }
+        
+        function drawGame() {
+            let output = '';
+            
+            for (let y = 0; y < H; y++) {
+                for (let x = 0; x < W; x++) {
+                    let char = ' ';
+                    
+                    // Animated borders
+                    if (y === 0 || y === H-1) {
+                        char = borders[(x + frame * 2) % borders.length];
+                    } else if (x === 0 || x === W-1) {
+                        char = borders[(y + frame * 3) % borders.length];
+                    }
+                    // Snake head
+                    else if (snake[0][0] === y && snake[0][1] === x) {
+                        char = heads[frame % heads.length];
+                    }
+                    // Snake body
+                    else if (snake.slice(1).some(s => s[0] === y && s[1] === x)) {
+                        let idx = snake.findIndex(s => s[0] === y && s[1] === x);
+                        char = bodies[(idx + frame) % bodies.length];
+                    }
+                    // Food
+                    else if (food[0] === y && food[1] === x) {
+                        char = foods[frame % foods.length];
+                    }
+                    // Food ring
+                    else if (Math.abs(food[0] - y) <= 1 && Math.abs(food[1] - x) <= 1) {
+                        char = ':;·˙'[(x + y + frame) % 4];
+                    }
+                    // Animated game background
+                    else {
+                        let p = (y * W + x + frame * 2) % gameBg.length;
+                        if ((x + y + frame) % 4 === 0) {
+                            char = gameBg[p];
+                        }
+                    }
+                    
+                    output += char;
+                }
+                output += '\n';
+            }
+            
+            document.getElementById('board').textContent = output;
+            document.getElementById('score').textContent = score;
+            document.getElementById('status').textContent = 
+                over ? 'GAME OVER! Press R' : 
+                running ? 'Playing...' : 
+                'Press SPACE to start';
+        }
+        
+        function newFood() {
+            do {
+                food = [
+                    1 + Math.floor(Math.random() * (H - 2)),
+                    1 + Math.floor(Math.random() * (W - 2))
+                ];
+            } while (snake.some(s => s[0] === food[0] && s[1] === food[1]));
+        }
+        
+        function update() {
+            if (!running || over) return;
+            
+            dir = nextDir;
+            let newHead = [snake[0][0] + dir[0], snake[0][1] + dir[1]];
+            
+            if (newHead[0] <= 0 || newHead[0] >= H-1 || 
+                newHead[1] <= 0 || newHead[1] >= W-1) {
+                over = true;
+                return;
+            }
+            
+            if (snake.some(s => s[0] === newHead[0] && s[1] === newHead[1])) {
+                over = true;
+                return;
+            }
+            
+            snake.unshift(newHead);
+            
+            if (newHead[0] === food[0] && newHead[1] === food[1]) {
+                score += 10;
+                newFood();
+            } else {
+                snake.pop();
+            }
+        }
+        
+        // Fast animation
+        setInterval(() => {
+            frame++;
+            drawBackground();
+            drawGame();
+        }, 60);
+        
+        // Game update
+        setInterval(() => {
+            update();
+        }, 140);
+        
+        // Keyboard
+        window.addEventListener('keydown', (e) => {
+            if (e.key === ' ') {
+                if (!running && !over) {
+                    running = true;
+                }
+                e.preventDefault();
+            }
+
+            if (e.key === 'r' || e.key === 'R') {
+                snake = [[10, 22], [10, 21], [10, 20]];
+                dir = [0, 1];
+                nextDir = [0, 1];
+                food = [10, 35];
+                score = 0;
+                running = true;
+                over = false;
+                newFood();
+            }
+
+            const moves = {
+                'ArrowUp': [-1, 0],
+                'ArrowDown': [1, 0],
+                'ArrowLeft': [0, -1],
+                'ArrowRight': [0, 1]
+            };
+
+            if (moves[e.key]) {
+                e.preventDefault();
+                let d = moves[e.key];
+                if (d[0] + dir[0] !== 0 || d[1] + dir[1] !== 0) {
+                    nextDir = d;
+                }
+            }
+        });
+
+        // Mobile touch controls - divide screen into 4 quadrants
+        window.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+
+            const touch = e.touches[0];
+            const x = touch.clientX;
+            const y = touch.clientY;
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+
+            // Start game on first tap if not running
+            if (!running && !over) {
+                running = true;
+                return;
+            }
+
+            // Restart on tap if game over
+            if (over) {
+                snake = [[10, 22], [10, 21], [10, 20]];
+                dir = [0, 1];
+                nextDir = [0, 1];
+                food = [10, 35];
+                score = 0;
+                running = true;
+                over = false;
+                newFood();
+                return;
+            }
+
+            // Determine which quadrant was tapped
+            // Calculate distance from center to determine direction
+            const dx = x - centerX;
+            const dy = y - centerY;
+
+            let d;
+            if (Math.abs(dx) > Math.abs(dy)) {
+                // Horizontal movement (left or right)
+                d = dx > 0 ? [0, 1] : [0, -1]; // right : left
+            } else {
+                // Vertical movement (up or down)
+                d = dy > 0 ? [1, 0] : [-1, 0]; // down : up
+            }
+
+            // Prevent reversing direction
+            if (d[0] + dir[0] !== 0 || d[1] + dir[1] !== 0) {
+                nextDir = d;
+            }
+        });
+        
+        drawBackground();
+        drawGame();
+    </script>
+</body>
+</html>
