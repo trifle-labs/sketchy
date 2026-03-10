@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AvatarServant</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f13;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.4rem; letter-spacing: -0.5px; }
+    p.subtitle { color: #888; margin-bottom: 2rem; font-size: 0.95rem; }
+    .card {
+      background: #1a1a24;
+      border: 1px solid #2a2a3a;
+      border-radius: 12px;
+      padding: 2rem;
+      width: 100%;
+      max-width: 560px;
+    }
+    .drop-zone {
+      border: 2px dashed #2a2a3a;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      margin-bottom: 1rem;
+      position: relative;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: #5050bb;
+      background: rgba(80, 80, 187, 0.05);
+    }
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+    .drop-zone .preview {
+      width: 120px;
+      height: 120px;
+      object-fit: cover;
+      border-radius: 8px;
+      margin: 0 auto 0.75rem;
+      display: none;
+    }
+    .drop-zone .preview.visible { display: block; }
+    .drop-zone .drop-text { color: #888; font-size: 0.9rem; }
+    .drop-zone .drop-text strong { color: #aaa; }
+    button {
+      width: 100%;
+      padding: 0.75rem;
+      background: #5050bb;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover:not(:disabled) { background: #6060dd; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .spinner {
+      display: none;
+      width: 1.2rem;
+      height: 1.2rem;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      color: #888;
+      text-align: center;
+      min-height: 1.2em;
+    }
+    .status.error { color: #e06060; }
+    .images {
+      display: none;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+    .images.visible { display: flex; }
+    .img-box {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .img-box span { font-size: 0.78rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+    .img-box img {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid #2a2a3a;
+    }
+    a.download-link {
+      display: block;
+      margin-top: 0.4rem;
+      font-size: 0.78rem;
+      color: #6060cc;
+      text-align: center;
+      text-decoration: none;
+    }
+    a.download-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <h1>AvatarServant</h1>
+  <p class="subtitle">Transform any avatar through a ComfyUI img2img workflow</p>
+
+  <div class="card">
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept="image/*" />
+      <img class="preview" id="preview" alt="Preview" />
+      <div class="drop-text" id="dropText">
+        <strong>Click to upload</strong> or drag & drop<br/>
+        <span style="font-size:0.8rem;color:#555">PNG, JPG, WEBP up to 20MB</span>
+      </div>
+    </div>
+
+    <button id="generateBtn" onclick="generate()" disabled>Transform</button>
+    <div class="spinner" id="spinner"></div>
+    <div class="status" id="status"></div>
+
+    <div class="images" id="images">
+      <div class="img-box">
+        <span>Original</span>
+        <img id="originalImg" alt="Original avatar" />
+      </div>
+      <div class="img-box">
+        <span>Transformed</span>
+        <img id="resultImg" alt="Transformed avatar" />
+        <a id="downloadLink" class="download-link" href="#" download="transformed.png">Download</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let selectedFile = null;
+
+    const fileInput = document.getElementById('fileInput');
+    const dropZone = document.getElementById('dropZone');
+    const preview = document.getElementById('preview');
+    const dropText = document.getElementById('dropText');
+    const generateBtn = document.getElementById('generateBtn');
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) setFile(fileInput.files[0]);
+    });
+
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+    });
+
+    function setFile(file) {
+      selectedFile = file;
+      const url = URL.createObjectURL(file);
+      preview.src = url;
+      preview.classList.add('visible');
+      dropText.style.display = 'none';
+      generateBtn.disabled = false;
+    }
+
+    async function generate() {
+      if (!selectedFile) return;
+
+      const btn = document.getElementById('generateBtn');
+      const spinner = document.getElementById('spinner');
+      const images = document.getElementById('images');
+
+      btn.disabled = true;
+      spinner.style.display = 'block';
+      images.classList.remove('visible');
+      setStatus('Uploading and processing...');
+
+      try {
+        const formData = new FormData();
+        formData.append('avatar', selectedFile);
+
+        const res = await fetch('/generate', { method: 'POST', body: formData });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setStatus(data.error ?? 'Something went wrong.', true);
+          return;
+        }
+
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+
+        document.getElementById('originalImg').src = URL.createObjectURL(selectedFile);
+        document.getElementById('resultImg').src = objectUrl;
+        document.getElementById('downloadLink').href = objectUrl;
+        images.classList.add('visible');
+        setStatus('Done!');
+      } catch (err) {
+        setStatus('Network error: ' + err.message, true);
+      } finally {
+        btn.disabled = false;
+        spinner.style.display = 'none';
+      }
+    }
+
+    function setStatus(msg, isError = false) {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = 'status' + (isError ? ' error' : '');
+    }
+  </script>
+</body>
+</html>
