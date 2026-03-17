@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>babynames.market — name card generator</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: #f0f4f8; color: #1a1a1a;
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    padding: 40px 16px;
+  }
+  .app { max-width: 520px; width: 100%; }
+  .header { text-align: center; margin-bottom: 24px; }
+  .header h1 {
+    font-size: 14px; font-weight: 400; color: #6b8db5;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  .search-bar { display: flex; gap: 6px; margin-bottom: 12px; align-items: center; }
+  .search-bar input[type="text"] {
+    flex: 1; font-size: 16px; padding: 10px 14px;
+    border: 1px solid #c8d8e8; border-radius: 12px;
+    background: #fff; outline: none; color: #1a1a1a;
+  }
+  .search-bar input:focus { border-color: #b49ce8; }
+  .search-bar input::placeholder { color: #99aabb; }
+  .sex-toggle { display: flex; gap: 2px; }
+  .sex-btn {
+    padding: 10px 14px; font-size: 13px; font-weight: 600;
+    border-radius: 12px; cursor: pointer;
+    border: 1px solid #c8d8e8; background: #fff; color: #6b8db5;
+  }
+  .sex-btn.active { border-color: #b49ce8; background: rgba(180,156,232,0.1); color: #8b6cc8; }
+  .lookup-btn {
+    padding: 10px 20px; font-size: 13px; font-weight: 600;
+    border-radius: 12px; cursor: pointer;
+    background: #d1e5f7; border: none; color: #1a3a5c;
+  }
+  .lookup-btn:hover { background: #bdd6f0; }
+  .random-btn {
+    padding: 8px 14px; font-size: 11px; font-weight: 500;
+    border-radius: 10px; cursor: pointer;
+    background: #fff; border: 1px solid #d0dae4; color: #6b8db5;
+    margin-bottom: 20px;
+  }
+  .random-btn:hover { background: #e8f0f8; border-color: #b49ce8; }
+  .status { text-align: center; padding: 40px 20px; color: #6b8db5; font-size: 13px; }
+  .status .sub { font-size: 11px; color: #99aabb; margin-top: 6px; }
+  .error { font-size: 12px; color: #d85a30; padding: 0 4px; margin-bottom: 12px; }
+
+  .card-outer { background: #d1e5f7; border-radius: 24px; padding: 20px; }
+  .card-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0 4px 14px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 10px; letter-spacing: 1.5px; color: #6b8db5; text-transform: uppercase;
+  }
+  .card-inner {
+    background: #0c1425; border-radius: 18px; overflow: hidden;
+    box-shadow: 0 0 30px rgba(180,140,255,0.12), 0 0 60px rgba(100,160,255,0.06);
+  }
+  .card-name-area { padding: 22px 22px 6px; }
+  .card-name-row { display: flex; align-items: baseline; gap: 10px; }
+  .card-name { font-size: 42px; font-weight: 600; color: #f0f4f8; letter-spacing: -1px; }
+  .card-sex { font-size: 14px; color: #b49ce8; font-weight: 500; }
+  .card-subtitle { font-size: 12px; color: #6b7d99; margin-top: 2px; }
+  .card-sparkline { padding: 14px 22px 10px; }
+  .card-stats { padding: 4px 22px 16px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .stat-box { background: #111d33; border-radius: 12px; padding: 10px 8px; text-align: center; }
+  .stat-value { font-size: 22px; font-weight: 600; }
+  .stat-label { font-size: 9px; color: #4a6a8a; margin-top: 1px; letter-spacing: 0.3px; }
+  .card-narrative { padding: 4px 22px 18px; }
+  .narrative-box { background: #111d33; border-radius: 14px; padding: 14px 16px; }
+  .narrative-summary { font-size: 12px; color: #8fa4be; line-height: 1.65; }
+  .narrative-divider { margin-top: 10px; padding-top: 10px; border-top: 1px solid #1a2744; }
+  .narrative-context { font-size: 11px; color: #5b7a9e; line-height: 1.6; }
+  .narrative-loading { font-size: 12px; color: #5b7a9e; font-style: italic; }
+  .card-dots { display: flex; justify-content: center; gap: 16px; padding: 14px 0 2px; }
+  .card-dot { width: 8px; height: 8px; border-radius: 50%; opacity: 0.5; }
+
+  .tweet-area-wrapper { margin-top: 16px; background: #fff; border-radius: 14px; padding: 16px; border: 1px solid #e0e8f0; }
+  .tweet-label { font-size: 10px; color: #99aabb; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+  .tweet-text {
+    font-size: 13px; color: #1a1a1a; line-height: 1.6;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .copy-btn {
+    margin-top: 10px; padding: 6px 14px; font-size: 11px;
+    border-radius: 8px; cursor: pointer;
+    background: #f0f4f8; border: 1px solid #d0dae4; color: #4a6a8a;
+  }
+  .copy-btn:hover { background: #e4ecf4; }
+  .tip { margin-top: 12px; font-size: 11px; color: #99aabb; padding: 0 4px; }
+
+  .history { margin-top: 24px; border-top: 1px solid #d8e4ef; padding-top: 16px; }
+  .history-label { font-size: 10px; color: #99aabb; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+  .history-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .history-chip {
+    padding: 5px 12px; font-size: 12px; border-radius: 20px; cursor: pointer;
+    background: #fff; border: 1px solid #d0dae4; color: #4a6a8a;
+  }
+  .history-chip:hover { background: #e8f0f8; border-color: #b49ce8; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header"><h1>babynames.market — name card generator</h1></div>
+  <div id="loading-area" class="status">
+    <div id="loading-text">loading name data...</div>
+    <div class="sub">2.1 million records across 145 years (~17MB)</div>
+  </div>
+  <div id="search-area" style="display:none;">
+    <div class="search-bar">
+      <input type="text" id="name-input" placeholder="enter a name..." autocomplete="off" />
+      <div class="sex-toggle">
+        <button class="sex-btn active" id="btn-f" onclick="setSex('F')">F</button>
+        <button class="sex-btn" id="btn-m" onclick="setSex('M')">M</button>
+      </div>
+      <button class="lookup-btn" onclick="doSearch()">look up</button>
+    </div>
+    <button class="random-btn" onclick="randomName()">random obscure name</button>
+    <div id="error-msg" class="error" style="display:none;"></div>
+  </div>
+  <div id="card-area" style="display:none;"></div>
+  <div id="tweet-area" style="display:none;"></div>
+  <div id="history-area" style="display:none;">
+    <div class="history">
+      <div class="history-label">recent lookups</div>
+      <div class="history-chips" id="history-chips"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/*
+  Data format (ssa-names.json):
+  {
+    "Mary/F": [1880, 7065, 1881, 6919, ...],   // flat: year, count, year, count, ...
+    "John/M": [1880, 9655, 1881, 8769, ...],
+    ...
+  }
+  Key = "Name/Sex", value = flat array of [year, count] pairs
+*/
+
+const YEAR_MIN = 1880, YEAR_MAX = 2024;
+let nameData = {};       // raw from JSON: key -> flat array
+let nameKeys = [];       // all keys for random picking
+let nameIndex = {};      // lowercase lookup: "mary/f" -> "Mary/F"
+let yearTotals = {};     // year -> { F: totalCount, M: totalCount } for rank calculation
+let currentSex = 'F', searchHistory = [];
+
+async function loadData() {
+  const lt = document.getElementById('loading-text');
+  try {
+    lt.textContent = 'fetching data...';
+    const r = await fetch('data/ssa-names.json');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    lt.textContent = 'parsing...';
+    nameData = await r.json();
+    nameKeys = Object.keys(nameData);
+
+    // build case-insensitive index
+    for (const key of nameKeys) {
+      nameIndex[key.toLowerCase()] = key;
+    }
+
+    // build year totals for rank calculation
+    lt.textContent = 'building rank index...';
+    for (const [key, arr] of Object.entries(nameData)) {
+      const sex = key.split('/')[1];
+      for (let i = 0; i < arr.length; i += 2) {
+        const year = arr[i], count = arr[i + 1];
+        if (!yearTotals[year]) yearTotals[year] = {};
+        if (!yearTotals[year][sex]) yearTotals[year][sex] = [];
+        yearTotals[year][sex].push({ key, count });
+      }
+    }
+    // sort each year's entries by count descending
+    for (const year of Object.keys(yearTotals)) {
+      for (const sex of Object.keys(yearTotals[year])) {
+        yearTotals[year][sex].sort((a, b) => b.count - a.count);
+      }
+    }
+
+    lt.textContent = nameKeys.length.toLocaleString() + ' name/sex combos loaded';
+    document.getElementById('loading-area').style.display = 'none';
+    document.getElementById('search-area').style.display = 'block';
+    document.getElementById('name-input').focus();
+  } catch (e) {
+    lt.textContent = 'failed: ' + e.message;
+    document.querySelector('.sub').textContent = 'make sure data/ssa-names.json exists. run via a local server (python3 -m http.server 8000), not file://.';
+  }
+}
+
+function buildProfile(name, sex) {
+  const lookupKey = (name + '/' + sex).toLowerCase();
+  const realKey = nameIndex[lookupKey];
+  if (!realKey) return null;
+
+  const arr = nameData[realKey];
+  const realName = realKey.split('/')[0];
+  const entries = [];
+
+  for (let i = 0; i < arr.length; i += 2) {
+    const year = arr[i], count = arr[i + 1];
+    // find rank
+    const yearList = yearTotals[year] && yearTotals[year][sex];
+    let rank = 0;
+    if (yearList) {
+      rank = yearList.findIndex(e => e.key === realKey) + 1;
+    }
+    entries.push({ year, count, rank });
+  }
+
+  entries.sort((a, b) => a.year - b.year);
+  if (!entries.length) return null;
+
+  const pk = entries.reduce((b, e) => e.count > b.count ? e : b, entries[0]);
+  return {
+    name: realName, sex, entries,
+    peakYear: pk.year, peakRank: pk.rank, peakCount: pk.count,
+    firstYear: entries[0].year, lastYear: entries[entries.length - 1].year,
+    totalBabies: entries.reduce((s, e) => s + e.count, 0), yearsOnList: entries.length,
+    yearsSinceLastSeen: YEAR_MAX - entries[entries.length - 1].year,
+    isActive: entries[entries.length - 1].year >= YEAR_MAX - 2
+  };
+}
+
+function setSex(s) {
+  currentSex = s;
+  document.getElementById('btn-f').classList.toggle('active', s === 'F');
+  document.getElementById('btn-m').classList.toggle('active', s === 'M');
+}
+
+function randomName() {
+  // pick from names that appeared 5 or fewer years
+  const obscure = nameKeys.filter(k => {
+    const arr = nameData[k];
+    return arr.length <= 10; // 10 = 5 year/count pairs
+  });
+  if (!obscure.length) return;
+  const pick = obscure[Math.floor(Math.random() * obscure.length)];
+  const [name, sex] = pick.split('/');
+  document.getElementById('name-input').value = name;
+  setSex(sex);
+  doSearch();
+}
+
+function doSearch() {
+  const input = document.getElementById('name-input').value.trim();
+  const err = document.getElementById('error-msg');
+  err.style.display = 'none';
+  if (!input) return;
+
+  let p = buildProfile(input, currentSex);
+  if (!p) {
+    const otherSex = currentSex === 'F' ? 'M' : 'F';
+    p = buildProfile(input, otherSex);
+    if (p) { setSex(otherSex); }
+  }
+  if (!p) {
+    err.textContent = '\u201c' + input + '\u201d not found in SSA data (either sex). the ssa only lists names with 5+ births in a year.';
+    err.style.display = 'block';
+    document.getElementById('card-area').style.display = 'none';
+    document.getElementById('tweet-area').style.display = 'none';
+    return;
+  }
+
+  searchHistory = searchHistory.filter(h => h.key !== p.name + '/' + p.sex);
+  searchHistory.unshift({ key: p.name + '/' + p.sex, name: p.name, sex: p.sex });
+  if (searchHistory.length > 15) searchHistory.pop();
+  renderHistory();
+  renderCard(p);
+  renderTweet(p);
+  genNarrative(p);
+}
+
+function renderHistory() {
+  const a = document.getElementById('history-area'), c = document.getElementById('history-chips');
+  if (!searchHistory.length) { a.style.display = 'none'; return; }
+  a.style.display = 'block';
+  c.innerHTML = searchHistory.map(h =>
+    '<button class="history-chip" onclick="qSearch(\'' + h.name.replace(/'/g, "\\'") + '\',\'' + h.sex + '\')">' +
+    h.name + ' <span style="color:#b49ce8;font-size:10px">' + h.sex + '</span></button>'
+  ).join('');
+}
+
+function qSearch(n, s) { document.getElementById('name-input').value = n; setSex(s); doSearch(); }
+
+function sparkSVG(entries, peakYear) {
+  const w = 436, h = 50, pad = 4, ys = YEAR_MAX - YEAR_MIN || 1, mc = Math.max(...entries.map(e => e.count));
+  const xY = y => pad + ((y - YEAR_MIN) / ys) * (w - pad * 2);
+  const yC = c => h - pad - (c / mc) * (h - pad * 2);
+  let s = '<svg width="100%" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">';
+  s += '<line x1="0" y1="' + (h - 2) + '" x2="' + w + '" y2="' + (h - 2) + '" stroke="#1a2744" stroke-width="0.5"/>';
+
+  if (entries.length === 1) {
+    const cx = xY(entries[0].year), cy = h / 2 - 4;
+    s += '<line x1="' + cx + '" y1="0" x2="' + cx + '" y2="' + (h - 4) + '" stroke="#1a2744" stroke-width="0.5" stroke-dasharray="2,3"/>';
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="10" fill="#b49ce8" opacity="0.08"/>';
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="6" fill="#b49ce8" opacity="0.15"/>';
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="3" fill="#b49ce8" opacity="0.9"/>';
+    s += '<line x1="' + (cx + 6) + '" y1="' + cy + '" x2="' + (w - pad) + '" y2="' + (h - 8) + '" stroke="#253552" stroke-width="0.5" stroke-dasharray="2,4"/>';
+    s += '<text x="' + (w / 2) + '" y="' + (cy + 2) + '" fill="#3d5170" font-size="8" font-style="italic" text-anchor="middle" font-family="sans-serif">silence</text>';
+    s += '<text x="' + cx + '" y="' + (h - 1) + '" fill="#3d5170" font-size="8" text-anchor="middle" font-family="monospace">' + entries[0].year + '</text>';
+    s += '<text x="' + (w - pad) + '" y="' + (h - 1) + '" fill="#3d5170" font-size="8" text-anchor="end" font-family="monospace">' + YEAR_MAX + '</text>';
+  } else {
+    s += '<polyline points="' + entries.map(e => xY(e.year) + ',' + yC(e.count)).join(' ') + '" fill="none" stroke="#b49ce8" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>';
+    const pe = entries.find(e => e.year === peakYear);
+    if (pe) { const cx = xY(pe.year), cy = yC(pe.count); s += '<circle cx="' + cx + '" cy="' + cy + '" r="6" fill="#b49ce8" opacity="0.15"/><circle cx="' + cx + '" cy="' + cy + '" r="2.5" fill="#b49ce8"/>'; }
+    s += '<text x="' + xY(entries[0].year) + '" y="' + (h - 1) + '" fill="#3d5170" font-size="8" text-anchor="middle" font-family="monospace">' + entries[0].year + '</text>';
+    s += '<text x="' + (w - pad) + '" y="' + (h - 1) + '" fill="#3d5170" font-size="8" text-anchor="end" font-family="monospace">' + YEAR_MAX + '</text>';
+  }
+  return s + '</svg>';
+}
+
+function renderCard(p) {
+  const a = document.getElementById('card-area'); a.style.display = 'block';
+  const sub = p.isActive ? 'appeared ' + p.firstYear + ' \u00b7 peak rank #' + p.peakRank + ' \u00b7 still active'
+    : p.yearsOnList === 1 ? 'appeared ' + p.firstYear + ' \u00b7 rank #' + p.peakRank + ' \u00b7 then nothing'
+    : p.firstYear + '\u2013' + p.lastYear + ' \u00b7 peak rank #' + p.peakRank + ' in ' + p.peakYear;
+  let s3v, s3l, s3c;
+  if (p.isActive) { s3v = '#' + p.peakRank; s3l = 'current peak'; s3c = '#4ade80'; }
+  else if (p.yearsSinceLastSeen > 0) { s3v = p.yearsSinceLastSeen; s3l = 'years gone'; s3c = '#f87171'; }
+  else { s3v = '#' + p.peakRank; s3l = 'peak rank'; s3c = '#4ade80'; }
+
+  a.innerHTML = '<div class="card-outer" id="screenshot-target">' +
+    '<div class="card-header"><span>ssa file #' + String(p.peakRank).padStart(4, '0') + '</span><span>babynames.market</span></div>' +
+    '<div class="card-inner">' +
+      '<div class="card-name-area"><div class="card-name-row"><span class="card-name">' + p.name + '</span><span class="card-sex">' + p.sex + '</span></div><div class="card-subtitle">' + sub + '</div></div>' +
+      '<div class="card-sparkline">' + sparkSVG(p.entries, p.peakYear) + '</div>' +
+      '<div class="card-stats">' +
+        '<div class="stat-box"><div class="stat-value" style="color:#4ade80">' + p.yearsOnList + '</div><div class="stat-label">' + (p.yearsOnList === 1 ? 'year on list' : 'years on list') + '</div></div>' +
+        '<div class="stat-box"><div class="stat-value" style="color:#f0f4f8">' + p.totalBabies.toLocaleString() + '</div><div class="stat-label">total babies</div></div>' +
+        '<div class="stat-box"><div class="stat-value" style="color:' + s3c + '">' + s3v + '</div><div class="stat-label">' + s3l + '</div></div>' +
+      '</div>' +
+      '<div class="card-narrative" id="narrative-area"><div class="narrative-box"><div class="narrative-loading">researching this name...</div></div></div>' +
+    '</div>' +
+    '<div class="card-dots"><div class="card-dot" style="background:#b49ce8"></div><div class="card-dot" style="background:#8bb8e0"></div><div class="card-dot" style="background:#b49ce8"></div></div>' +
+  '</div>';
+  a.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderTweet(p) {
+  const a = document.getElementById('tweet-area'); a.style.display = 'block';
+  let t;
+  if (p.yearsOnList === 1)
+    t = p.name.toLowerCase() + '. ' + p.totalBabies + ' ' + (p.totalBabies === 1 ? 'baby' : 'babies') + '. ' + p.firstYear + '. never again.\n\nthe minimum viable name.';
+  else if (p.isActive)
+    t = p.name.toLowerCase() + '. on the list since ' + p.firstYear + '. peaked at #' + p.peakRank + ' in ' + p.peakYear + '. ' + p.totalBabies.toLocaleString() + ' babies and counting.';
+  else if (p.yearsOnList <= 5)
+    t = p.name.toLowerCase() + '. ' + p.yearsOnList + ' years on the list. ' + p.totalBabies.toLocaleString() + ' babies total. appeared in ' + p.firstYear + ', gone by ' + (p.lastYear + 1) + '.\n\nbarely a name. more of a rumor.';
+  else
+    t = p.name.toLowerCase() + '. ' + p.firstYear + '\u2013' + p.lastYear + '. peaked at #' + p.peakRank + '. then ' + p.yearsSinceLastSeen + ' years of silence.\n\nnames don\'t die. they just stop being chosen.';
+  a.innerHTML = '<div class="tweet-area-wrapper"><div class="tweet-label">suggested tweet</div><div class="tweet-text" id="tweet-text">' + t + '</div><button class="copy-btn" onclick="copyTweet()">copy tweet</button></div><div class="tip">tip: screenshot the card above for the post image.</div>';
+}
+
+function copyTweet() {
+  navigator.clipboard.writeText(document.getElementById('tweet-text').textContent).then(() => {
+    const b = document.querySelector('.copy-btn'); b.textContent = 'copied'; setTimeout(() => b.textContent = 'copy tweet', 1500);
+  });
+}
+
+async function genNarrative(p) {
+  const na = document.getElementById('narrative-area');
+  const yearSample = p.entries.length <= 80 ? p.entries : [...p.entries.slice(0, 30), ...p.entries.slice(-30)];
+  const prompt = 'You are writing for babynames.market, a prediction market for baby names built by trifle, a crypto gaming studio in berlin. Voice: lowercase, deadpan, dry humor. No exclamation marks. No startup energy. Be genuinely interesting and specific.\n\nSSA baby name data:\nName: ' + p.name + ' | Sex: ' + (p.sex === 'F' ? 'Female' : 'Male') + '\nFirst: ' + p.firstYear + ' | Last: ' + p.lastYear + ' | Years on list: ' + p.yearsOnList + '\nPeak: ' + p.peakYear + ' (rank #' + p.peakRank + ', ' + p.peakCount.toLocaleString() + ' babies)\nTotal: ' + p.totalBabies.toLocaleString() + ' | Active: ' + (p.isActive ? 'yes' : 'no, last seen ' + p.lastYear) + '\nYear data (sample): ' + yearSample.map(e => e.year + ':' + e.count).join(', ') + (p.entries.length > 80 ? ' ... (' + p.entries.length + ' total years)' : '') + '\n\nWrite:\n1. "summary" \u2014 2-3 sentences. The data story: shape of the curve, the rise, the fall, the anomaly. Lowercase, dry, funny-if-appropriate.\n2. "context" \u2014 2-4 sentences. The WHY. Cultural context, etymology, pop culture, historical events. Note: pre-1935 SSA data comes from adults who applied for social security later, not birth certificates.\n\nRespond ONLY with JSON: {"summary": "...", "context": "..."}';
+
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 600, messages: [{ role: 'user', content: prompt }] })
+    });
+    const d = await r.json();
+    const txt = (d.content || []).find(b => b.type === 'text');
+    if (!txt) throw new Error('no response');
+    const parsed = JSON.parse(txt.text.replace(/```json|```/g, '').trim());
+    na.innerHTML = '<div class="narrative-box"><div class="narrative-summary">' + parsed.summary + '</div>' +
+      (parsed.context ? '<div class="narrative-divider"><div class="narrative-context">' + parsed.context + '</div></div>' : '') + '</div>';
+  } catch (e) {
+    na.innerHTML = '<div class="narrative-box"><div class="narrative-summary" style="color:#5b7a9e">narrative generation failed. the name speaks for itself.</div></div>';
+  }
+}
+
+document.getElementById('name-input').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+loadData();
+</script>
+</body>
+</html>
