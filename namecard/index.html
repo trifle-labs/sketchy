@@ -40,13 +40,16 @@
     background: #d1e5f7; border: none; color: #1a3a5c;
   }
   .lookup-btn:hover { background: #bdd6f0; }
-  .random-btn {
+  .btn-row { display: flex; gap: 6px; margin-bottom: 20px; }
+  .random-btn, .export-btn {
     padding: 8px 14px; font-size: 11px; font-weight: 500;
     border-radius: 10px; cursor: pointer;
     background: #fff; border: 1px solid #d0dae4; color: #6b8db5;
-    margin-bottom: 20px;
   }
-  .random-btn:hover { background: #e8f0f8; border-color: #b49ce8; }
+  .random-btn:hover, .export-btn:hover { background: #e8f0f8; border-color: #b49ce8; }
+  .export-btn { background: #d1e5f7; border-color: #b4cde8; color: #1a3a5c; }
+  .export-btn:hover { background: #bdd6f0; }
+  .export-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .status { text-align: center; padding: 40px 20px; color: #6b8db5; font-size: 13px; }
   .status .sub { font-size: 11px; color: #99aabb; margin-top: 6px; }
   .error { font-size: 12px; color: #d85a30; padding: 0 4px; margin-bottom: 12px; }
@@ -77,9 +80,23 @@
   .narrative-summary { font-size: 12px; color: #8fa4be; line-height: 1.65; }
   .narrative-divider { margin-top: 10px; padding-top: 10px; border-top: 1px solid #1a2744; }
   .narrative-context { font-size: 11px; color: #5b7a9e; line-height: 1.6; }
-  .narrative-loading { font-size: 12px; color: #5b7a9e; font-style: italic; }
   .card-dots { display: flex; justify-content: center; gap: 16px; padding: 14px 0 2px; }
   .card-dot { width: 8px; height: 8px; border-radius: 50%; opacity: 0.5; }
+
+  .edit-area { margin-top: 16px; background: #fff; border-radius: 14px; padding: 16px; border: 1px solid #e0e8f0; }
+  .edit-label { font-size: 10px; color: #99aabb; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+  .edit-area textarea {
+    width: 100%; border: 1px solid #d0dae4; border-radius: 8px;
+    padding: 10px; font-size: 12px; font-family: inherit;
+    resize: vertical; outline: none; color: #1a1a1a; line-height: 1.5;
+  }
+  .edit-area textarea:focus { border-color: #b49ce8; }
+  .edit-area .apply-btn {
+    margin-top: 8px; padding: 6px 14px; font-size: 11px;
+    border-radius: 8px; cursor: pointer;
+    background: #d1e5f7; border: none; color: #1a3a5c;
+  }
+  .edit-area .apply-btn:hover { background: #bdd6f0; }
 
   .tweet-area-wrapper { margin-top: 16px; background: #fff; border-radius: 14px; padding: 16px; border: 1px solid #e0e8f0; }
   .tweet-label { font-size: 10px; color: #99aabb; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
@@ -94,7 +111,6 @@
     background: #f0f4f8; border: 1px solid #d0dae4; color: #4a6a8a;
   }
   .copy-btn:hover { background: #e4ecf4; }
-  .tip { margin-top: 12px; font-size: 11px; color: #99aabb; padding: 0 4px; }
 
   .history { margin-top: 24px; border-top: 1px solid #d8e4ef; padding-top: 16px; }
   .history-label { font-size: 10px; color: #99aabb; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
@@ -122,10 +138,14 @@
       </div>
       <button class="lookup-btn" onclick="doSearch()">look up</button>
     </div>
-    <button class="random-btn" onclick="randomName()">random obscure name</button>
+    <div class="btn-row">
+      <button class="random-btn" onclick="randomName()">random obscure name</button>
+      <button class="export-btn" id="export-btn" onclick="exportCard()" disabled>export card as PNG</button>
+    </div>
     <div id="error-msg" class="error" style="display:none;"></div>
   </div>
   <div id="card-area" style="display:none;"></div>
+  <div id="edit-area" style="display:none;"></div>
   <div id="tweet-area" style="display:none;"></div>
   <div id="history-area" style="display:none;">
     <div class="history">
@@ -135,23 +155,11 @@
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
-/*
-  Data format (ssa-names.json):
-  {
-    "Mary/F": [1880, 7065, 1881, 6919, ...],   // flat: year, count, year, count, ...
-    "John/M": [1880, 9655, 1881, 8769, ...],
-    ...
-  }
-  Key = "Name/Sex", value = flat array of [year, count] pairs
-*/
-
 const YEAR_MIN = 1880, YEAR_MAX = 2024;
-let nameData = {};       // raw from JSON: key -> flat array
-let nameKeys = [];       // all keys for random picking
-let nameIndex = {};      // lowercase lookup: "mary/f" -> "Mary/F"
-let yearTotals = {};     // year -> { F: totalCount, M: totalCount } for rank calculation
-let currentSex = 'F', searchHistory = [];
+let nameData = {}, nameKeys = [], nameIndex = {}, yearTotals = {};
+let currentSex = 'F', searchHistory = [], currentProfile = null;
 
 async function loadData() {
   const lt = document.getElementById('loading-text');
@@ -162,13 +170,8 @@ async function loadData() {
     lt.textContent = 'parsing...';
     nameData = await r.json();
     nameKeys = Object.keys(nameData);
+    for (const key of nameKeys) nameIndex[key.toLowerCase()] = key;
 
-    // build case-insensitive index
-    for (const key of nameKeys) {
-      nameIndex[key.toLowerCase()] = key;
-    }
-
-    // build year totals for rank calculation
     lt.textContent = 'building rank index...';
     for (const [key, arr] of Object.entries(nameData)) {
       const sex = key.split('/')[1];
@@ -179,20 +182,16 @@ async function loadData() {
         yearTotals[year][sex].push({ key, count });
       }
     }
-    // sort each year's entries by count descending
-    for (const year of Object.keys(yearTotals)) {
-      for (const sex of Object.keys(yearTotals[year])) {
+    for (const year of Object.keys(yearTotals))
+      for (const sex of Object.keys(yearTotals[year]))
         yearTotals[year][sex].sort((a, b) => b.count - a.count);
-      }
-    }
 
-    lt.textContent = nameKeys.length.toLocaleString() + ' name/sex combos loaded';
     document.getElementById('loading-area').style.display = 'none';
     document.getElementById('search-area').style.display = 'block';
     document.getElementById('name-input').focus();
   } catch (e) {
     lt.textContent = 'failed: ' + e.message;
-    document.querySelector('.sub').textContent = 'make sure data/ssa-names.json exists. run via a local server (python3 -m http.server 8000), not file://.';
+    document.querySelector('.sub').textContent = 'make sure ssa-names.json is in the same folder. serve via http (python3 -m http.server), not file://.';
   }
 }
 
@@ -200,25 +199,18 @@ function buildProfile(name, sex) {
   const lookupKey = (name + '/' + sex).toLowerCase();
   const realKey = nameIndex[lookupKey];
   if (!realKey) return null;
-
   const arr = nameData[realKey];
   const realName = realKey.split('/')[0];
   const entries = [];
-
   for (let i = 0; i < arr.length; i += 2) {
     const year = arr[i], count = arr[i + 1];
-    // find rank
     const yearList = yearTotals[year] && yearTotals[year][sex];
     let rank = 0;
-    if (yearList) {
-      rank = yearList.findIndex(e => e.key === realKey) + 1;
-    }
+    if (yearList) rank = yearList.findIndex(e => e.key === realKey) + 1;
     entries.push({ year, count, rank });
   }
-
   entries.sort((a, b) => a.year - b.year);
   if (!entries.length) return null;
-
   const pk = entries.reduce((b, e) => e.count > b.count ? e : b, entries[0]);
   return {
     name: realName, sex, entries,
@@ -237,11 +229,7 @@ function setSex(s) {
 }
 
 function randomName() {
-  // pick from names that appeared 5 or fewer years
-  const obscure = nameKeys.filter(k => {
-    const arr = nameData[k];
-    return arr.length <= 10; // 10 = 5 year/count pairs
-  });
+  const obscure = nameKeys.filter(k => nameData[k].length <= 10);
   if (!obscure.length) return;
   const pick = obscure[Math.floor(Math.random() * obscure.length)];
   const [name, sex] = pick.split('/');
@@ -255,28 +243,30 @@ function doSearch() {
   const err = document.getElementById('error-msg');
   err.style.display = 'none';
   if (!input) return;
-
   let p = buildProfile(input, currentSex);
   if (!p) {
     const otherSex = currentSex === 'F' ? 'M' : 'F';
     p = buildProfile(input, otherSex);
-    if (p) { setSex(otherSex); }
+    if (p) setSex(otherSex);
   }
   if (!p) {
-    err.textContent = '\u201c' + input + '\u201d not found in SSA data (either sex). the ssa only lists names with 5+ births in a year.';
+    err.textContent = '\u201c' + input + '\u201d not found (either sex). ssa only lists names with 5+ births/year.';
     err.style.display = 'block';
     document.getElementById('card-area').style.display = 'none';
+    document.getElementById('edit-area').style.display = 'none';
     document.getElementById('tweet-area').style.display = 'none';
+    document.getElementById('export-btn').disabled = true;
     return;
   }
-
+  currentProfile = p;
   searchHistory = searchHistory.filter(h => h.key !== p.name + '/' + p.sex);
   searchHistory.unshift({ key: p.name + '/' + p.sex, name: p.name, sex: p.sex });
   if (searchHistory.length > 15) searchHistory.pop();
   renderHistory();
-  renderCard(p);
+  renderCard(p, '', '');
+  renderEditArea(p);
   renderTweet(p);
-  genNarrative(p);
+  document.getElementById('export-btn').disabled = false;
 }
 
 function renderHistory() {
@@ -297,7 +287,6 @@ function sparkSVG(entries, peakYear) {
   const yC = c => h - pad - (c / mc) * (h - pad * 2);
   let s = '<svg width="100%" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">';
   s += '<line x1="0" y1="' + (h - 2) + '" x2="' + w + '" y2="' + (h - 2) + '" stroke="#1a2744" stroke-width="0.5"/>';
-
   if (entries.length === 1) {
     const cx = xY(entries[0].year), cy = h / 2 - 4;
     s += '<line x1="' + cx + '" y1="0" x2="' + cx + '" y2="' + (h - 4) + '" stroke="#1a2744" stroke-width="0.5" stroke-dasharray="2,3"/>';
@@ -318,7 +307,7 @@ function sparkSVG(entries, peakYear) {
   return s + '</svg>';
 }
 
-function renderCard(p) {
+function renderCard(p, summaryText, contextText) {
   const a = document.getElementById('card-area'); a.style.display = 'block';
   const sub = p.isActive ? 'appeared ' + p.firstYear + ' \u00b7 peak rank #' + p.peakRank + ' \u00b7 still active'
     : p.yearsOnList === 1 ? 'appeared ' + p.firstYear + ' \u00b7 rank #' + p.peakRank + ' \u00b7 then nothing'
@@ -327,6 +316,14 @@ function renderCard(p) {
   if (p.isActive) { s3v = '#' + p.peakRank; s3l = 'current peak'; s3c = '#4ade80'; }
   else if (p.yearsSinceLastSeen > 0) { s3v = p.yearsSinceLastSeen; s3l = 'years gone'; s3c = '#f87171'; }
   else { s3v = '#' + p.peakRank; s3l = 'peak rank'; s3c = '#4ade80'; }
+
+  let narrativeHTML = '';
+  if (summaryText || contextText) {
+    narrativeHTML = '<div class="card-narrative"><div class="narrative-box">' +
+      '<div class="narrative-summary">' + summaryText + '</div>' +
+      (contextText ? '<div class="narrative-divider"><div class="narrative-context">' + contextText + '</div></div>' : '') +
+      '</div></div>';
+  }
 
   a.innerHTML = '<div class="card-outer" id="screenshot-target">' +
     '<div class="card-header"><span>ssa file #' + String(p.peakRank).padStart(4, '0') + '</span><span>babynames.market</span></div>' +
@@ -338,11 +335,44 @@ function renderCard(p) {
         '<div class="stat-box"><div class="stat-value" style="color:#f0f4f8">' + p.totalBabies.toLocaleString() + '</div><div class="stat-label">total babies</div></div>' +
         '<div class="stat-box"><div class="stat-value" style="color:' + s3c + '">' + s3v + '</div><div class="stat-label">' + s3l + '</div></div>' +
       '</div>' +
-      '<div class="card-narrative" id="narrative-area"><div class="narrative-box"><div class="narrative-loading">researching this name...</div></div></div>' +
+      narrativeHTML +
     '</div>' +
     '<div class="card-dots"><div class="card-dot" style="background:#b49ce8"></div><div class="card-dot" style="background:#8bb8e0"></div><div class="card-dot" style="background:#b49ce8"></div></div>' +
   '</div>';
-  a.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderEditArea(p) {
+  const a = document.getElementById('edit-area'); a.style.display = 'block';
+
+  // auto-generate a default summary based on the data
+  let defaultSummary = '';
+  if (p.yearsOnList === 1) {
+    defaultSummary = p.totalBabies + ' babies were given this name in ' + p.firstYear + '. then it vanished from the record entirely. the ssa requires 5 births to list a name — ' + p.name.toLowerCase() + ' appeared just enough to exist, and never again.';
+  } else if (p.isActive) {
+    defaultSummary = p.name.toLowerCase() + ' has been on the list for ' + p.yearsOnList + ' years and is still going. peaked at #' + p.peakRank + ' in ' + p.peakYear + ' with ' + p.peakCount.toLocaleString() + ' babies.';
+  } else if (p.yearsOnList <= 5) {
+    defaultSummary = p.name.toLowerCase() + ' appeared on the list ' + p.yearsOnList + ' times between ' + p.firstYear + ' and ' + p.lastYear + '. ' + p.totalBabies.toLocaleString() + ' babies total. barely a name. more of a rumor.';
+  } else {
+    defaultSummary = p.name.toLowerCase() + ' peaked at #' + p.peakRank + ' in ' + p.peakYear + ' with ' + p.peakCount.toLocaleString() + ' babies. it held on for ' + p.yearsOnList + ' years total before disappearing in ' + p.lastYear + '. ' + p.yearsSinceLastSeen + ' years of silence since.';
+  }
+
+  a.innerHTML = '<div class="edit-area">' +
+    '<div class="edit-label">card summary (edit and apply to card)</div>' +
+    '<textarea id="summary-input" rows="3" placeholder="write the summary...">' + defaultSummary + '</textarea>' +
+    '<div class="edit-label" style="margin-top:12px">context (optional — shows below the line)</div>' +
+    '<textarea id="context-input" rows="3" placeholder="cultural context, etymology, why this name rose or fell..."></textarea>' +
+    '<button class="apply-btn" onclick="applyNarrative()">apply to card</button>' +
+  '</div>';
+
+  // auto-apply the default summary immediately
+  renderCard(p, defaultSummary, '');
+}
+
+function applyNarrative() {
+  if (!currentProfile) return;
+  const summary = document.getElementById('summary-input').value.trim();
+  const context = document.getElementById('context-input').value.trim();
+  renderCard(currentProfile, summary, context);
 }
 
 function renderTweet(p) {
@@ -356,7 +386,7 @@ function renderTweet(p) {
     t = p.name.toLowerCase() + '. ' + p.yearsOnList + ' years on the list. ' + p.totalBabies.toLocaleString() + ' babies total. appeared in ' + p.firstYear + ', gone by ' + (p.lastYear + 1) + '.\n\nbarely a name. more of a rumor.';
   else
     t = p.name.toLowerCase() + '. ' + p.firstYear + '\u2013' + p.lastYear + '. peaked at #' + p.peakRank + '. then ' + p.yearsSinceLastSeen + ' years of silence.\n\nnames don\'t die. they just stop being chosen.';
-  a.innerHTML = '<div class="tweet-area-wrapper"><div class="tweet-label">suggested tweet</div><div class="tweet-text" id="tweet-text">' + t + '</div><button class="copy-btn" onclick="copyTweet()">copy tweet</button></div><div class="tip">tip: screenshot the card above for the post image.</div>';
+  a.innerHTML = '<div class="tweet-area-wrapper"><div class="tweet-label">suggested tweet</div><div class="tweet-text" id="tweet-text">' + t + '</div><button class="copy-btn" onclick="copyTweet()">copy tweet</button></div>';
 }
 
 function copyTweet() {
@@ -365,25 +395,28 @@ function copyTweet() {
   });
 }
 
-async function genNarrative(p) {
-  const na = document.getElementById('narrative-area');
-  const yearSample = p.entries.length <= 80 ? p.entries : [...p.entries.slice(0, 30), ...p.entries.slice(-30)];
-  const prompt = 'You are writing for babynames.market, a prediction market for baby names built by trifle, a crypto gaming studio in berlin. Voice: lowercase, deadpan, dry humor. No exclamation marks. No startup energy. Be genuinely interesting and specific.\n\nSSA baby name data:\nName: ' + p.name + ' | Sex: ' + (p.sex === 'F' ? 'Female' : 'Male') + '\nFirst: ' + p.firstYear + ' | Last: ' + p.lastYear + ' | Years on list: ' + p.yearsOnList + '\nPeak: ' + p.peakYear + ' (rank #' + p.peakRank + ', ' + p.peakCount.toLocaleString() + ' babies)\nTotal: ' + p.totalBabies.toLocaleString() + ' | Active: ' + (p.isActive ? 'yes' : 'no, last seen ' + p.lastYear) + '\nYear data (sample): ' + yearSample.map(e => e.year + ':' + e.count).join(', ') + (p.entries.length > 80 ? ' ... (' + p.entries.length + ' total years)' : '') + '\n\nWrite:\n1. "summary" \u2014 2-3 sentences. The data story: shape of the curve, the rise, the fall, the anomaly. Lowercase, dry, funny-if-appropriate.\n2. "context" \u2014 2-4 sentences. The WHY. Cultural context, etymology, pop culture, historical events. Note: pre-1935 SSA data comes from adults who applied for social security later, not birth certificates.\n\nRespond ONLY with JSON: {"summary": "...", "context": "..."}';
+function exportCard() {
+  const target = document.getElementById('screenshot-target');
+  if (!target) return;
+  const btn = document.getElementById('export-btn');
+  btn.textContent = 'exporting...'; btn.disabled = true;
 
-  try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 600, messages: [{ role: 'user', content: prompt }] })
-    });
-    const d = await r.json();
-    const txt = (d.content || []).find(b => b.type === 'text');
-    if (!txt) throw new Error('no response');
-    const parsed = JSON.parse(txt.text.replace(/```json|```/g, '').trim());
-    na.innerHTML = '<div class="narrative-box"><div class="narrative-summary">' + parsed.summary + '</div>' +
-      (parsed.context ? '<div class="narrative-divider"><div class="narrative-context">' + parsed.context + '</div></div>' : '') + '</div>';
-  } catch (e) {
-    na.innerHTML = '<div class="narrative-box"><div class="narrative-summary" style="color:#5b7a9e">narrative generation failed. the name speaks for itself.</div></div>';
-  }
+  html2canvas(target, {
+    backgroundColor: null,
+    scale: 2,
+    useCORS: true,
+    logging: false
+  }).then(function(canvas) {
+    const link = document.createElement('a');
+    link.download = (currentProfile ? currentProfile.name.toLowerCase() : 'namecard') + '-babynames-market.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    btn.textContent = 'export card as PNG'; btn.disabled = false;
+  }).catch(function(err) {
+    console.error('export failed:', err);
+    btn.textContent = 'export failed — try again'; btn.disabled = false;
+    setTimeout(() => { btn.textContent = 'export card as PNG'; }, 2000);
+  });
 }
 
 document.getElementById('name-input').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
