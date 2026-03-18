@@ -68,7 +68,7 @@
   .card-name-area { padding: 22px 22px 6px; }
   .card-name-row { display: flex; align-items: baseline; gap: 10px; }
   .card-name { font-size: 42px; font-weight: 600; color: #f0f4f8; letter-spacing: -1px; }
-  .card-sex { font-size: 14px; color: #b49ce8; font-weight: 500; }
+  .card-sex { font-size: 14px; font-weight: 500; }
   .card-subtitle { font-size: 12px; color: #6b7d99; margin-top: 2px; }
   .card-sparkline { padding: 14px 22px 10px; }
   .card-stats { padding: 4px 22px 16px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
@@ -133,8 +133,8 @@
     <div class="search-bar">
       <input type="text" id="name-input" placeholder="enter a name..." autocomplete="off" />
       <div class="sex-toggle">
-        <button class="sex-btn active" id="btn-f" onclick="setSex('F')">F</button>
-        <button class="sex-btn" id="btn-m" onclick="setSex('M')">M</button>
+        <button class="sex-btn active" id="btn-f" onclick="setSex('F')">girl</button>
+        <button class="sex-btn" id="btn-m" onclick="setSex('M')">boy</button>
       </div>
       <button class="lookup-btn" onclick="doSearch()">look up</button>
     </div>
@@ -281,7 +281,8 @@ function renderHistory() {
 
 function qSearch(n, s) { document.getElementById('name-input').value = n; setSex(s); doSearch(); }
 
-function sparkSVG(entries, peakYear) {
+function sparkSVG(entries, peakYear, accent) {
+  accent = accent || '#b49ce8';
   const w = 436, h = 50, pad = 4, ys = YEAR_MAX - YEAR_MIN || 1, mc = Math.max(...entries.map(e => e.count));
   const xY = y => pad + ((y - YEAR_MIN) / ys) * (w - pad * 2);
   const yC = c => h - pad - (c / mc) * (h - pad * 2);
@@ -290,17 +291,17 @@ function sparkSVG(entries, peakYear) {
   if (entries.length === 1) {
     const cx = xY(entries[0].year), cy = h / 2 - 4;
     s += '<line x1="' + cx + '" y1="0" x2="' + cx + '" y2="' + (h - 4) + '" stroke="#1a2744" stroke-width="0.5" stroke-dasharray="2,3"/>';
-    s += '<circle cx="' + cx + '" cy="' + cy + '" r="10" fill="#b49ce8" opacity="0.08"/>';
-    s += '<circle cx="' + cx + '" cy="' + cy + '" r="6" fill="#b49ce8" opacity="0.15"/>';
-    s += '<circle cx="' + cx + '" cy="' + cy + '" r="3" fill="#b49ce8" opacity="0.9"/>';
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="10" fill="' + accent + '" opacity="0.08"/>';
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="6" fill="' + accent + '" opacity="0.15"/>';
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="3" fill="' + accent + '" opacity="0.9"/>';
     s += '<line x1="' + (cx + 6) + '" y1="' + cy + '" x2="' + (w - pad) + '" y2="' + (h - 8) + '" stroke="#253552" stroke-width="0.5" stroke-dasharray="2,4"/>';
     s += '<text x="' + (w / 2) + '" y="' + (cy + 2) + '" fill="#3d5170" font-size="8" font-style="italic" text-anchor="middle" font-family="sans-serif">silence</text>';
     s += '<text x="' + cx + '" y="' + (h - 1) + '" fill="#3d5170" font-size="8" text-anchor="middle" font-family="monospace">' + entries[0].year + '</text>';
     s += '<text x="' + (w - pad) + '" y="' + (h - 1) + '" fill="#3d5170" font-size="8" text-anchor="end" font-family="monospace">' + YEAR_MAX + '</text>';
   } else {
-    s += '<polyline points="' + entries.map(e => xY(e.year) + ',' + yC(e.count)).join(' ') + '" fill="none" stroke="#b49ce8" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>';
+    s += '<polyline points="' + entries.map(e => xY(e.year) + ',' + yC(e.count)).join(' ') + '" fill="none" stroke="' + accent + '" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>';
     const pe = entries.find(e => e.year === peakYear);
-    if (pe) { const cx = xY(pe.year), cy = yC(pe.count); s += '<circle cx="' + cx + '" cy="' + cy + '" r="6" fill="#b49ce8" opacity="0.15"/><circle cx="' + cx + '" cy="' + cy + '" r="2.5" fill="#b49ce8"/>'; }
+    if (pe) { const cx = xY(pe.year), cy = yC(pe.count); s += '<circle cx="' + cx + '" cy="' + cy + '" r="6" fill="' + accent + '" opacity="0.15"/><circle cx="' + cx + '" cy="' + cy + '" r="2.5" fill="' + accent + '"/>'; }
     s += '<text x="' + xY(entries[0].year) + '" y="' + (h - 1) + '" fill="#3d5170" font-size="8" text-anchor="middle" font-family="monospace">' + entries[0].year + '</text>';
     s += '<text x="' + (w - pad) + '" y="' + (h - 1) + '" fill="#3d5170" font-size="8" text-anchor="end" font-family="monospace">' + YEAR_MAX + '</text>';
   }
@@ -309,6 +310,17 @@ function sparkSVG(entries, peakYear) {
 
 function renderCard(p, summaryText, contextText) {
   const a = document.getElementById('card-area'); a.style.display = 'block';
+
+  // color theme based on sex
+  const isGirl = p.sex === 'F';
+  const outerBg = isGirl ? '#f7d1e5' : '#d1e5f7';
+  const accentColor = isGirl ? '#e89cb4' : '#9cb4e8';
+  const headerColor = isGirl ? '#b56b8d' : '#6b8db5';
+  const glowColor = isGirl ? 'rgba(255,140,180,0.12)' : 'rgba(140,180,255,0.12)';
+  const glowColor2 = isGirl ? 'rgba(255,100,160,0.06)' : 'rgba(100,160,255,0.06)';
+  const dotColor1 = isGirl ? '#e89cb4' : '#b49ce8';
+  const dotColor2 = isGirl ? '#e0a8bb' : '#8bb8e0';
+
   const sub = p.isActive ? 'appeared ' + p.firstYear + ' \u00b7 peak rank #' + p.peakRank + ' \u00b7 still active'
     : p.yearsOnList === 1 ? 'appeared ' + p.firstYear + ' \u00b7 rank #' + p.peakRank + ' \u00b7 then nothing'
     : p.firstYear + '\u2013' + p.lastYear + ' \u00b7 peak rank #' + p.peakRank + ' in ' + p.peakYear;
@@ -325,11 +337,11 @@ function renderCard(p, summaryText, contextText) {
       '</div></div>';
   }
 
-  a.innerHTML = '<div class="card-outer" id="screenshot-target">' +
-    '<div class="card-header"><span>ssa file #' + String(p.peakRank).padStart(4, '0') + '</span><span>babynames.market</span></div>' +
-    '<div class="card-inner">' +
-      '<div class="card-name-area"><div class="card-name-row"><span class="card-name">' + p.name + '</span><span class="card-sex">' + p.sex + '</span></div><div class="card-subtitle">' + sub + '</div></div>' +
-      '<div class="card-sparkline">' + sparkSVG(p.entries, p.peakYear) + '</div>' +
+  a.innerHTML = '<div class="card-outer" id="screenshot-target" style="background:' + outerBg + '">' +
+    '<div class="card-header" style="color:' + headerColor + '"><span>ssa file #' + String(p.peakRank).padStart(4, '0') + '</span><span>babynames.market</span></div>' +
+    '<div class="card-inner" style="box-shadow:0 0 30px ' + glowColor + ', 0 0 60px ' + glowColor2 + '">' +
+      '<div class="card-name-area"><div class="card-name-row"><span class="card-name">' + p.name + '</span><span class="card-sex" style="color:' + accentColor + '">' + (p.sex === 'F' ? 'girl' : 'boy') + '</span></div><div class="card-subtitle">' + sub + '</div></div>' +
+      '<div class="card-sparkline">' + sparkSVG(p.entries, p.peakYear, accentColor) + '</div>' +
       '<div class="card-stats">' +
         '<div class="stat-box"><div class="stat-value" style="color:#4ade80">' + p.yearsOnList + '</div><div class="stat-label">' + (p.yearsOnList === 1 ? 'year on list' : 'years on list') + '</div></div>' +
         '<div class="stat-box"><div class="stat-value" style="color:#f0f4f8">' + p.totalBabies.toLocaleString() + '</div><div class="stat-label">total babies</div></div>' +
@@ -337,7 +349,7 @@ function renderCard(p, summaryText, contextText) {
       '</div>' +
       narrativeHTML +
     '</div>' +
-    '<div class="card-dots"><div class="card-dot" style="background:#b49ce8"></div><div class="card-dot" style="background:#8bb8e0"></div><div class="card-dot" style="background:#b49ce8"></div></div>' +
+    '<div class="card-dots"><div class="card-dot" style="background:' + dotColor1 + '"></div><div class="card-dot" style="background:' + dotColor2 + '"></div><div class="card-dot" style="background:' + dotColor1 + '"></div></div>' +
   '</div>';
 }
 
