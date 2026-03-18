@@ -157,7 +157,7 @@ async function loadData() {
   const lt = document.getElementById('loading-text');
   try {
     lt.textContent = 'fetching data...';
-    const r = await fetch('data/ssa-names.json');
+    const r = await fetch('ssa-names.json');
     if (!r.ok) throw new Error('HTTP ' + r.status);
     lt.textContent = 'parsing...';
     nameData = await r.json();
