@@ -35,7 +35,7 @@
 
   /* CARD */
   .card-outer { border-radius: 20px; padding: 16px 16px 14px; width: 500px; height: auto; display: flex; flex-direction: column; }
-  .card-header { display: flex; justify-content: center; align-items: center; padding: 0 2px 10px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; flex-shrink: 0; }
+  .card-header { display: flex; justify-content: space-between; align-items: center; padding: 0 2px 10px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; flex-shrink: 0; }
   .card-inner { background: #0c1425; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,0.06); }
   .card-top { padding: 20px 22px 0; display: flex; justify-content: space-between; align-items: flex-start; flex-shrink: 0; }
   .card-name-left {}
@@ -168,7 +168,8 @@ function buildProfile(name, sex) {
   entries.sort((a, b) => a.year - b.year);
   if (!entries.length) return null;
   const pk = entries.reduce((b, e) => e.count > b.count ? e : b, entries[0]);
-  return { name: rn, sex, entries, peakYear: pk.year, peakRank: pk.rank, peakCount: pk.count, firstYear: entries[0].year, lastYear: entries[entries.length - 1].year, totalBabies: entries.reduce((s, e) => s + e.count, 0), yearsOnList: entries.length, yearsSinceLastSeen: YEAR_MAX - entries[entries.length - 1].year, isActive: entries[entries.length - 1].year >= YEAR_MAX - 2 };
+  const lastEntry = entries[entries.length - 1];
+  return { name: rn, sex, entries, peakYear: pk.year, peakRank: pk.rank, peakCount: pk.count, currentRank: lastEntry.rank, firstYear: entries[0].year, lastYear: lastEntry.year, totalBabies: entries.reduce((s, e) => s + e.count, 0), yearsOnList: entries.length, yearsSinceLastSeen: YEAR_MAX - lastEntry.year, isActive: lastEntry.year >= YEAR_MAX - 2 };
 }
 
 function setSex(s) { currentSex = s; document.getElementById('btn-f').classList.toggle('active', s === 'F'); document.getElementById('btn-m').classList.toggle('active', s === 'M'); }
@@ -257,12 +258,12 @@ function renderCard(p, summaryText) {
   const stripeColor = isGirl ? '#f7d1e5' : '#6B80FF';
   const gradId = 'grad-' + Date.now();
 
-  const sub = p.isActive ? 'appeared ' + p.firstYear + ' \u00b7 rank #' + p.peakRank + ' \u00b7 continuing'
+  const sub = p.isActive ? 'appeared ' + p.firstYear + ' \u00b7 peak #' + p.peakRank + ' (' + p.peakYear + ') \u00b7 continuing'
     : p.yearsOnList === 1 ? 'appeared ' + p.firstYear + ' \u00b7 rank #' + p.peakRank + ' \u00b7 then nothing'
-    : p.firstYear + '\u2013' + p.lastYear + ' \u00b7 peak rank #' + p.peakRank + ' in ' + p.peakYear;
+    : p.firstYear + '\u2013' + p.lastYear + ' \u00b7 peak #' + p.peakRank + ' (' + p.peakYear + ')';
 
   let s3v, s3l, s3c;
-  if (p.isActive) { s3v = '0'; s3l = 'years gone'; s3c = '#4ade80'; }
+  if (p.isActive) { s3v = '#' + p.currentRank; s3l = 'rank in ' + p.lastYear; s3c = '#f0f4f8'; }
   else if (p.yearsSinceLastSeen > 0) { s3v = p.yearsSinceLastSeen; s3l = 'years gone'; s3c = '#f87171'; }
   else { s3v = '#' + p.peakRank; s3l = 'peak rank'; s3c = '#4ade80'; }
 
@@ -270,7 +271,7 @@ function renderCard(p, summaryText) {
   if (summaryText) narHTML = '<div class="card-narrative"><div class="narrative-box"><div class="narrative-summary">' + summaryText + '</div></div></div>';
 
   a.innerHTML = '<div class="card-outer" id="screenshot-target" style="background:' + outerBg + '">' +
-    '<div class="card-header" style="color:' + headerColor + '"><span>babynames.market</span></div>' +
+    '<div class="card-header" style="color:' + headerColor + '"><span>babynames.market</span><span>ssa info since 1880</span></div>' +
     '<div class="card-inner">' +
       '<div class="card-top">' +
         '<div class="card-name-left"><div class="card-name-row"><span class="card-name">' + p.name + '</span><span class="card-sex" style="color:' + sexColor + '">' + (isGirl ? 'girl' : 'boy') + '</span></div><div class="card-subtitle">' + sub + '</div></div>' +
