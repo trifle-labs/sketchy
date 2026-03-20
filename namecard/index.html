@@ -34,25 +34,25 @@
   .error { font-size: 12px; color: #d85a30; padding: 0 4px; margin-bottom: 12px; }
 
   /* CARD */
-  .card-outer { border-radius: 20px; padding: 16px 16px 14px; width: 500px; height: 500px; display: flex; flex-direction: column; }
-  .card-header { display: flex; justify-content: space-between; align-items: center; padding: 0 2px 10px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; flex-shrink: 0; }
-  .card-inner { background: #0c1425; border-radius: 16px; overflow: hidden; flex: 1; display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,0.06); }
+  .card-outer { border-radius: 20px; padding: 16px 16px 14px; width: 500px; height: auto; display: flex; flex-direction: column; }
+  .card-header { display: flex; justify-content: center; align-items: center; padding: 0 2px 10px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; flex-shrink: 0; }
+  .card-inner { background: #0c1425; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,0.06); }
   .card-top { padding: 20px 22px 0; display: flex; justify-content: space-between; align-items: flex-start; flex-shrink: 0; }
   .card-name-left {}
   .card-name-row { display: flex; align-items: baseline; gap: 8px; }
-  .card-name { font-size: 48px; font-weight: 700; color: #f0f4f8; letter-spacing: -1.5px; line-height: 1; }
+  .card-name { font-size: 62px; font-weight: 700; color: #f0f4f8; letter-spacing: -1.5px; line-height: 1; }
   .card-sex { font-size: 16px; font-weight: 500; }
-  .card-subtitle { font-size: 11px; color: #8fa4be; margin-top: 6px; }
+  .card-subtitle { font-size: 17px; color: #8fa4be; margin-top: 6px; }
   .card-rattle { flex-shrink: 0; margin-top: 4px; }
-  .card-chart { padding: 12px 22px 0; flex: 1; min-height: 0; }
+  .card-chart { padding: 12px 22px 0; flex-shrink: 0; }
   .card-chart svg { display: block; }
-  .card-stats { padding: 12px 22px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; flex-shrink: 0; }
-  .stat-box { background: #111d33; border-radius: 10px; padding: 10px 8px; text-align: center; border: 1px solid rgba(255,255,255,0.04); }
-  .stat-value { font-size: 24px; font-weight: 700; }
-  .stat-label { font-size: 8px; color: #7a90a8; margin-top: 2px; letter-spacing: 0.3px; text-transform: lowercase; }
+  .card-stats { padding: 14px 22px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; flex-shrink: 0; }
+  .stat-box { background: #111d33; border-radius: 10px; padding: 16px 10px; text-align: center; border: 1px solid rgba(255,255,255,0.04); }
+  .stat-value { font-size: 32px; font-weight: 700; }
+  .stat-label { font-size: 12px; color: #7a90a8; margin-top: 2px; letter-spacing: 0.3px; text-transform: lowercase; }
   .card-narrative { padding: 0 22px 18px; flex-shrink: 0; }
   .narrative-box { background: #111d33; border-radius: 10px; padding: 12px 14px; border: 1px solid rgba(255,255,255,0.04); }
-  .narrative-summary { font-size: 12px; color: #8fa4be; line-height: 1.55; }
+  .narrative-summary { font-size: 16px; color: #8fa4be; line-height: 1.55; }
 
   .edit-area { margin-top: 16px; background: #fff; border-radius: 14px; padding: 16px; border: 1px solid #e0e8f0; }
   .edit-label { font-size: 10px; color: #99aabb; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
@@ -109,21 +109,18 @@ const YEAR_MIN = 1880, YEAR_MAX = 2024;
 let nameData = {}, nameKeys = [], nameIndex = {}, yearTotals = {};
 let currentSex = 'F', searchHistory = [], currentProfile = null;
 
+
 function rattleSVG(stripeColor) {
-  var c = '#8a9bb5';
-  return '<svg viewBox="0 0 36 58" xmlns="http://www.w3.org/2000/svg" width="36" height="58">' +
-    '<defs><clipPath id="rc"><circle cx="18" cy="15" r="13"/></clipPath></defs>' +
-    '<circle cx="18" cy="15" r="13" fill="' + c + '"/>' +
-    '<g clip-path="url(#rc)">' +
-      '<path d="M5,9 Q18,13 31,9" fill="none" stroke="' + stripeColor + '" stroke-width="2.5" stroke-linecap="round"/>' +
-      '<path d="M5,16 Q18,20 31,16" fill="none" stroke="' + stripeColor + '" stroke-width="3.5" stroke-linecap="round"/>' +
-      '<path d="M5,23 Q18,27 31,23" fill="none" stroke="' + stripeColor + '" stroke-width="2" stroke-linecap="round"/>' +
+  var f = stripeColor;
+  return '<svg width="36" height="58" viewBox="0 0 107 186" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+    '<g clip-path="url(#rc2)">' +
+    '<path fill-rule="evenodd" clip-rule="evenodd" d="M41.9512 117.368C45.7012 118.056 49.5659 118.416 53.5146 118.416C57.1632 118.416 60.7398 118.108 64.2207 117.519C64.5277 119.053 64.897 120.55 65.3301 122.006C66.1271 124.685 66.8297 127.103 67.4365 129.257C67.892 130.868 68.5261 132.748 69.3379 134.893C71.3434 140.187 73.1452 144.911 74.7422 149.062C75.2854 150.473 75.7663 151.882 76.1924 153.283C77.0366 155.732 77.497 158.36 77.4971 161.096C77.4968 174.327 66.7698 185.055 53.5381 185.055C40.3066 185.054 29.5803 174.327 29.5801 161.096C29.5801 158.625 29.9548 156.241 30.6494 153.998H30.6123C31.0108 152.688 31.3576 151.463 31.8359 150.217C33.0431 147.066 34.6864 142.64 36.7656 136.942C37.5077 134.908 38.0836 133.126 38.4922 131.601C39.1592 129.107 39.6691 127.265 40.0215 126.078C40.9006 123.118 41.3303 120.662 41.9512 117.368ZM53.5137 148.339C46.6027 148.339 41.0002 153.942 41 160.853C41 167.764 46.6026 173.366 53.5137 173.366C60.4249 173.366 66.0283 167.764 66.0283 160.853C66.0282 153.941 60.4249 148.339 53.5137 148.339Z" fill="' + f + '"/>' +
+    '<path d="M99.3379 80.9038C90.0986 96.574 73.0469 107.088 53.5391 107.088C34.0313 107.088 16.9794 96.5741 7.74023 80.9038C20.2535 86.8105 36.2695 90.2603 53.54 90.2603C70.81 90.2602 86.8249 86.8102 99.3379 80.9038Z" fill="' + f + '"/>' +
+    '<path d="M101.955 32.0513C104.982 38.7309 106.669 46.1476 106.669 53.9585C106.669 57.4176 106.337 60.7998 105.706 64.0747C103.532 65.8885 100.947 67.6379 97.9385 69.2827C86.8552 75.3416 71.1678 79.2602 53.54 79.2603C35.912 79.2603 20.224 75.3417 9.14062 69.2827C6.13116 67.6375 3.54571 65.888 1.37109 64.0737C0.739957 60.7993 0.410156 57.4172 0.410156 53.9585C0.410218 46.1478 2.09589 38.7308 5.12305 32.0513C17.9805 38.7476 35.0405 42.7056 53.54 42.7056C72.039 42.7055 89.0978 38.7473 101.955 32.0513Z" fill="' + f + '"/>' +
+    '<path d="M53.5391 0.82959C71.1266 0.82959 86.718 9.37582 96.3877 22.5415C85.4147 28.1331 70.362 31.7055 53.54 31.7056C36.7175 31.7056 21.6636 28.1334 10.6904 22.5415C20.3601 9.3757 35.9515 0.829728 53.5391 0.82959Z" fill="' + f + '"/>' +
     '</g>' +
-    '<ellipse cx="18" cy="28" rx="6.5" ry="2.5" fill="' + c + '"/>' +
-    '<path d="M14,28 Q14,33 13,38 Q12.2,42 13,45 Q14,48 16,50 Q17,51.5 18,52.5 Q19,51.5 20,50 Q22,48 23,45 Q23.8,42 23,38 Q22,33 22,28 Z" fill="' + c + '"/>' +
-    '<ellipse cx="18" cy="50" rx="5" ry="5.5" fill="' + c + '"/>' +
-    '<ellipse cx="18" cy="50" rx="2.8" ry="3" fill="#0c1425"/>' +
-  '</svg>';
+    '<defs><clipPath id="rc2"><rect width="107" height="186" fill="white"/></clipPath></defs>' +
+    '</svg>';
 }
 
 async function loadData() {
@@ -194,7 +191,7 @@ function doSearch() {
   searchHistory = searchHistory.filter(h => h.key !== p.name + '/' + p.sex);
   searchHistory.unshift({ key: p.name + '/' + p.sex, name: p.name, sex: p.sex });
   if (searchHistory.length > 15) searchHistory.pop();
-  renderHistory(); renderCard(p, '', ''); renderEditArea(p); renderTweet(p);
+  renderHistory(); renderCard(p, ''); renderEditArea(p); renderTweet(p);
   document.getElementById('export-btn').disabled = false;
 }
 
@@ -208,7 +205,7 @@ function qSearch(n, s) { document.getElementById('name-input').value = n; setSex
 
 function sparkSVG(entries, peakYear, accent, gradId) {
   accent = accent || '#9cb4e8';
-  const w = 456, h = 120, padL = 0, padR = 0, padT = 10, padB = 22;
+  const w = 456, h = 80, padL = 0, padR = 0, padT = 6, padB = 18;
   const chartH = h - padT - padB;
   const mc = Math.max(...entries.map(e => e.count));
   const minYear = entries[0].year, maxYear = entries[entries.length - 1].year;
@@ -227,7 +224,7 @@ function sparkSVG(entries, peakYear, accent, gradId) {
     s += '<circle cx="' + cx + '" cy="' + cy + '" r="12" fill="' + accent + '" opacity="0.08"/>';
     s += '<circle cx="' + cx + '" cy="' + cy + '" r="6" fill="' + accent + '" opacity="0.2"/>';
     s += '<circle cx="' + cx + '" cy="' + cy + '" r="3" fill="' + accent + '"/>';
-    s += '<text x="' + cx + '" y="' + (h - 4) + '" fill="#7a90a8" font-size="10" text-anchor="middle" font-family="monospace">' + entries[0].year + '</text>';
+    s += '<text x="' + cx + '" y="' + (h - 4) + '" fill="#7a90a8" font-size="15" text-anchor="middle" font-family="monospace">' + entries[0].year + '</text>';
   } else {
     // gradient fill under the line
     const pts = entries.map(e => xY(e.year) + ',' + yC(e.count));
@@ -244,8 +241,8 @@ function sparkSVG(entries, peakYear, accent, gradId) {
     // dot on first if line has a visible start
     s += '<circle cx="' + xY(entries[0].year) + '" cy="' + yC(entries[0].count) + '" r="3" fill="' + accent + '" opacity="0.5"/>';
     // year labels
-    s += '<text x="0" y="' + (h - 4) + '" fill="#7a90a8" font-size="10" text-anchor="start" font-family="monospace">' + minYear + '</text>';
-    s += '<text x="' + w + '" y="' + (h - 4) + '" fill="#7a90a8" font-size="10" text-anchor="end" font-family="monospace">' + maxYear + '</text>';
+    s += '<text x="0" y="' + (h - 4) + '" fill="#7a90a8" font-size="15" text-anchor="start" font-family="monospace">' + minYear + '</text>';
+    s += '<text x="' + w + '" y="' + (h - 4) + '" fill="#7a90a8" font-size="15" text-anchor="end" font-family="monospace">' + maxYear + '</text>';
   }
   return s + '</svg>';
 }
@@ -254,10 +251,10 @@ function renderCard(p, summaryText) {
   const a = document.getElementById('card-area'); a.style.display = 'block';
   const isGirl = p.sex === 'F';
   const outerBg = isGirl ? '#f7d1e5' : '#d1e5f7';
-  const accent = isGirl ? '#e89cb4' : '#9cb4e8';
-  const headerColor = isGirl ? '#b56b8d' : '#6b8db5';
-  const sexColor = isGirl ? '#c47a95' : '#7a95c4';
-  const stripeColor = isGirl ? '#f7d1e5' : '#d1e5f7';
+  const accent = isGirl ? '#e89cb4' : '#6B80FF';
+  const headerColor = isGirl ? '#b56b8d' : '#5065D4';
+  const sexColor = isGirl ? '#c47a95' : '#6B80FF';
+  const stripeColor = isGirl ? '#f7d1e5' : '#6B80FF';
   const gradId = 'grad-' + Date.now();
 
   const sub = p.isActive ? 'appeared ' + p.firstYear + ' \u00b7 rank #' + p.peakRank + ' \u00b7 continuing'
@@ -273,7 +270,7 @@ function renderCard(p, summaryText) {
   if (summaryText) narHTML = '<div class="card-narrative"><div class="narrative-box"><div class="narrative-summary">' + summaryText + '</div></div></div>';
 
   a.innerHTML = '<div class="card-outer" id="screenshot-target" style="background:' + outerBg + '">' +
-    '<div class="card-header" style="color:' + headerColor + '"><span>ssa file #' + String(p.peakRank).padStart(4, '0') + '</span><span>babynames.market</span></div>' +
+    '<div class="card-header" style="color:' + headerColor + '"><span>babynames.market</span></div>' +
     '<div class="card-inner">' +
       '<div class="card-top">' +
         '<div class="card-name-left"><div class="card-name-row"><span class="card-name">' + p.name + '</span><span class="card-sex" style="color:' + sexColor + '">' + (isGirl ? 'girl' : 'boy') + '</span></div><div class="card-subtitle">' + sub + '</div></div>' +
