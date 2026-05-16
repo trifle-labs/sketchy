@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>capsule station — trifle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+  /* ---------- palette pulled from the image itself ---------- */
+  :root {
+    --ceiling: #ffe066;
+    --ceiling-shadow: #e0b83d;
+    --floor: #b8c2cc;
+    --floor-dark: #6e7b85;
+    --plastic: #f5efe6;
+    --frame: #1a1a22;
+    --dome-glass: #c8e0f0;
+    --led-blue: #2c5fa8;
+    --accent-red: #e84545;
+    --halo-warm: #ffe9b5;
+    --hover-glow: #ffeb3b;
+    --hover-glow-2: #ffffff;
+    --hover-glow-cool: #6ec6ff;
+    --tooltip-bg: #1a1a22;
+    --tooltip-edge: #ffe066;
+    --tooltip-text: #f5efe6;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--frame);
+    font-family: 'VT323', monospace;
+    color: var(--tooltip-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><rect x='0' y='0' width='3' height='3' fill='%231a1a22'/><rect x='3' y='3' width='3' height='3' fill='%231a1a22'/><rect x='6' y='6' width='3' height='3' fill='%231a1a22'/><rect x='9' y='9' width='3' height='3' fill='%231a1a22'/><rect x='12' y='12' width='3' height='3' fill='%231a1a22'/><rect x='3' y='0' width='3' height='3' fill='%23f5efe6'/><rect x='6' y='3' width='3' height='3' fill='%23f5efe6'/><rect x='9' y='6' width='3' height='3' fill='%23f5efe6'/><rect x='6' y='0' width='3' height='3' fill='%23f5efe6'/><rect x='9' y='3' width='3' height='3' fill='%23f5efe6'/></svg>") 2 2, auto;
+  }
+
+  /* ---------- ambient ceiling and floor extending past image edges ---------- */
+  .ambient-ceiling, .ambient-floor {
+    position: fixed;
+    left: 0;
+    width: 100%;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .ambient-ceiling {
+    top: 0;
+    height: 14.08%; /* matches top of grid in image */
+    background: var(--ceiling);
+    box-shadow: inset 0 -3px 0 var(--ceiling-shadow);
+  }
+  .ambient-floor {
+    bottom: 0;
+    height: 12.25%; /* matches bottom of grid in image */
+    background: linear-gradient(
+      to bottom,
+      var(--floor) 0%,
+      var(--floor) 60%,
+      var(--floor-dark) 100%
+    );
+    box-shadow: inset 0 3px 0 var(--frame);
+  }
+
+  /* tile pattern on the floor */
+  .ambient-floor::before {
+    content: '';
+    position: absolute;
+    inset: 4px 0 0 0;
+    background-image:
+      linear-gradient(to right, rgba(26,26,34,0.18) 1px, transparent 1px);
+    background-size: 80px 100%;
+  }
+
+  /* ---------- the main stage holds the image at 4:3 ---------- */
+  .stage {
+    position: relative;
+    height: 100vh;
+    aspect-ratio: 4 / 3;
+    z-index: 1;
+    flex-shrink: 0;
+  }
+
+  /* responsive fallback: when viewport is narrower than 4:3, fit by width */
+  @media (max-aspect-ratio: 4/3) {
+    .stage {
+      width: 100vw;
+      height: auto;
+    }
+    /* hide the ambient ceiling/floor — they only align cleanly on wide viewports */
+    .ambient-ceiling, .ambient-floor { display: none; }
+  }
+
+  .stage img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  /* ---------- the clickable grid overlay ---------- */
+  .grid {
+    position: absolute;
+    /* grid spans from y=14.08% to y=87.75%, x=3.25% to x=99.81% (from image analysis) */
+    left: 3.25%;
+    right: 0.19%;
+    top: 14.08%;
+    bottom: 12.25%;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    /* no gap — the frame lines are already in the image */
+  }
+
+  .machine {
+    position: relative;
+    cursor: pointer;
+    /* no background — purely a hit zone over the image */
+    transition: none;
+  }
+
+  /* ---------- pixel-art hover glow ---------- */
+  /* the glow is a stack of layers: tinted overlay + chunky outline + scanline shimmer */
+
+  .machine .glow {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    background:
+      /* dome-area warm light */
+      radial-gradient(
+        ellipse at 50% 30%,
+        rgba(255, 235, 59, 0.55) 0%,
+        rgba(255, 235, 59, 0.25) 35%,
+        transparent 70%
+      );
+  }
+
+  .machine .outline {
+    position: absolute;
+    inset: -1px;
+    opacity: 0;
+    pointer-events: none;
+    /* hard, pixel-stepped outer ring — no blur */
+    box-shadow:
+      0 0 0 3px var(--hover-glow),
+      0 0 0 6px var(--frame),
+      0 0 0 9px var(--hover-glow);
+  }
+
+  .machine .scanline {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+    background-image: repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.10) 0px,
+      rgba(255, 255, 255, 0.10) 2px,
+      transparent 2px,
+      transparent 4px
+    );
+    mix-blend-mode: overlay;
+  }
+
+  /* corner brackets — gives an "arcade target lock" feel */
+  .machine .bracket {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .machine .bracket::before,
+  .machine .bracket::after {
+    content: '';
+    position: absolute;
+    background: var(--hover-glow);
+  }
+  .machine .bracket::before { width: 12px; height: 3px; }
+  .machine .bracket::after  { width: 3px;  height: 12px; }
+
+  .machine .br-tl { top: -6px; left: -6px; }
+  .machine .br-tl::before { top: 0; left: 0; }
+  .machine .br-tl::after  { top: 0; left: 0; }
+
+  .machine .br-tr { top: -6px; right: -6px; }
+  .machine .br-tr::before { top: 0; right: 0; }
+  .machine .br-tr::after  { top: 0; right: 0; }
+
+  .machine .br-bl { bottom: -6px; left: -6px; }
+  .machine .br-bl::before { bottom: 0; left: 0; }
+  .machine .br-bl::after  { bottom: 0; left: 0; }
+
+  .machine .br-br { bottom: -6px; right: -6px; }
+  .machine .br-br::before { bottom: 0; right: 0; }
+  .machine .br-br::after  { bottom: 0; right: 0; }
+
+  /* hover state activates all layers with stepped animations */
+  .machine:hover .glow {
+    opacity: 1;
+    animation: pulse-glow 0.7s steps(2) infinite alternate;
+  }
+  .machine:hover .outline {
+    opacity: 1;
+    animation: pulse-outline 0.5s steps(2) infinite alternate;
+  }
+  .machine:hover .scanline {
+    opacity: 1;
+    animation: scanline-drift 1.4s steps(8) infinite;
+  }
+  .machine:hover .bracket {
+    opacity: 1;
+    animation: bracket-snap 0.3s steps(2) forwards;
+  }
+
+  @keyframes pulse-glow {
+    from { filter: hue-rotate(0deg) brightness(1); }
+    to   { filter: hue-rotate(20deg) brightness(1.3); }
+  }
+
+  @keyframes pulse-outline {
+    from {
+      box-shadow:
+        0 0 0 3px var(--hover-glow),
+        0 0 0 6px var(--frame),
+        0 0 0 9px var(--hover-glow);
+    }
+    to {
+      box-shadow:
+        0 0 0 3px var(--hover-glow-2),
+        0 0 0 6px var(--frame),
+        0 0 0 9px var(--hover-glow-cool);
+    }
+  }
+
+  @keyframes scanline-drift {
+    from { background-position: 0 0; }
+    to   { background-position: 0 32px; }
+  }
+
+  @keyframes bracket-snap {
+    from { transform: scale(0.5); }
+    to   { transform: scale(1); }
+  }
+
+  /* clicking — a brief flash */
+  .machine:active .outline {
+    animation: none;
+    box-shadow:
+      0 0 0 6px var(--hover-glow-2),
+      0 0 0 12px var(--frame),
+      0 0 0 18px var(--hover-glow);
+  }
+
+  /* "coming soon" / empty machines get a cooler-toned hover */
+  .machine.empty:hover .outline {
+    animation: none;
+    box-shadow:
+      0 0 0 3px var(--floor-dark),
+      0 0 0 6px var(--frame),
+      0 0 0 9px var(--floor-dark);
+  }
+  .machine.empty:hover .glow {
+    animation: none;
+    background: radial-gradient(
+      ellipse at 50% 30%,
+      rgba(110, 198, 255, 0.35) 0%,
+      transparent 70%
+    );
+  }
+  .machine.empty:hover .bracket::before,
+  .machine.empty:hover .bracket::after {
+    background: var(--floor-dark);
+  }
+
+  /* ---------- tooltip ---------- */
+  .tooltip {
+    position: fixed;
+    z-index: 100;
+    padding: 8px 12px 6px;
+    background: var(--tooltip-bg);
+    color: var(--tooltip-text);
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    line-height: 1.4;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -100%) translateY(-12px);
+    /* chunky pixel border */
+    box-shadow:
+      0 0 0 3px var(--tooltip-edge),
+      0 0 0 6px var(--tooltip-bg);
+    image-rendering: pixelated;
+    white-space: nowrap;
+    transition: opacity 60ms steps(2);
+  }
+  .tooltip.show { opacity: 1; }
+  .tooltip .sub {
+    display: block;
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    color: var(--ceiling);
+    margin-top: 4px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  /* ---------- header strip (optional small brand bug) ---------- */
+  .brand {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 10;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+    color: var(--frame);
+    text-shadow:
+      1px 0 0 var(--ceiling-shadow),
+      -1px 0 0 var(--ceiling-shadow),
+      0 1px 0 var(--ceiling-shadow),
+      0 -1px 0 var(--ceiling-shadow);
+    letter-spacing: 1px;
+    pointer-events: none;
+  }
+  .brand .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: var(--accent-red);
+    margin-right: 8px;
+    vertical-align: middle;
+    animation: blink 1.2s steps(2) infinite;
+  }
+  @keyframes blink {
+    0%, 60% { opacity: 1; }
+    61%, 100% { opacity: 0.3; }
+  }
+
+  /* ---------- ceiling spotlight flicker for ambience ---------- */
+  .spotlight {
+    position: fixed;
+    top: 0;
+    width: 2vw;
+    height: 14vh;
+    background: radial-gradient(
+      ellipse at 50% 0%,
+      rgba(255, 255, 200, 0.6) 0%,
+      rgba(255, 235, 59, 0.2) 40%,
+      transparent 70%
+    );
+    pointer-events: none;
+    z-index: 5;
+    mix-blend-mode: screen;
+    animation: flicker 4s steps(1) infinite;
+  }
+  @keyframes flicker {
+    0%, 92%, 95%, 100% { opacity: 1; }
+    93%, 94% { opacity: 0.5; }
+  }
+
+  /* ---------- focus styles for keyboard nav ---------- */
+  .machine:focus {
+    outline: none;
+  }
+  .machine:focus .outline,
+  .machine:focus .glow,
+  .machine:focus .scanline,
+  .machine:focus .bracket {
+    opacity: 1;
+  }
+</style>
+</head>
+<body>
+
+  <div class="ambient-ceiling"></div>
+  <div class="ambient-floor"></div>
+
+  <div class="brand"><span class="dot"></span>capsule station</div>
+
+  <div class="stage">
+    <img src="gashapon_wall.jpg" alt="A wall of empty pixel-art gashapon capsule machines">
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script>
+    // ---------- machine configuration ----------
+    // 12 columns × 3 rows = 36 slots. Edit freely.
+    // { label: shown in tooltip, sub: small line under it, href: where it goes }
+    // Set href to null for "coming soon" — cools the hover effect.
+    const MACHINES = [
+      // row 1 (top)
+      { label: 'SNAKE',       sub: 'snake.rodeo',          href: 'https://snake.rodeo' },
+      { label: 'ANYBODY',     sub: 'anybody.gg',           href: 'https://anybody.gg' },
+      { label: 'BABY NAMES',  sub: 'babynames.market',     href: 'https://babynames.market' },
+      { label: 'KUDZU',       sub: 'kudzu.rodeo',          href: 'https://kudzu.rodeo' },
+      { label: 'GM',          sub: 'gm.trifle.life',       href: 'https://gm.trifle.life' },
+      { label: 'STUDIO',      sub: 'trifle.life',          href: 'https://trifle.life' },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      // row 2 (middle)
+      { label: 'FUNHOUSE',    sub: 'gospels — series',     href: null },
+      { label: 'GIGI',        sub: 'the cat',              href: null },
+      { label: 'TILT',        sub: 'six petals',           href: null },
+      { label: 'EDEN',        sub: 'the snake',            href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      // row 3 (bottom)
+      { label: 'X',           sub: '@triflelife',          href: 'https://x.com/triflelife' },
+      { label: 'FARCASTER',   sub: '@triflelife',          href: 'https://farcaster.xyz/triflelife' },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null },
+      { label: '?',           sub: 'coming soon',          href: null }
+    ];
+
+    // ---------- build the grid ----------
+    const grid = document.getElementById('grid');
+    const tooltip = document.getElementById('tooltip');
+
+    MACHINES.forEach((m, i) => {
+      const el = document.createElement(m.href ? 'a' : 'div');
+      el.className = 'machine' + (m.href ? '' : ' empty');
+      if (m.href) {
+        el.href = m.href;
+        el.rel = 'noopener';
+      }
+      el.tabIndex = 0;
+      el.dataset.idx = i;
+      el.setAttribute('aria-label',
+        (m.label || '') + (m.sub ? ' — ' + m.sub : ''));
+
+      el.innerHTML = `
+        <div class="glow"></div>
+        <div class="scanline"></div>
+        <div class="outline"></div>
+        <span class="bracket br-tl"></span>
+        <span class="bracket br-tr"></span>
+        <span class="bracket br-bl"></span>
+        <span class="bracket br-br"></span>
+      `;
+
+      el.addEventListener('mouseenter', (e) => showTooltip(e, m));
+      el.addEventListener('mousemove',  (e) => moveTooltip(e));
+      el.addEventListener('mouseleave', hideTooltip);
+      el.addEventListener('focus',  (e) => showTooltipForElement(el, m));
+      el.addEventListener('blur',   hideTooltip);
+
+      grid.appendChild(el);
+    });
+
+    // ---------- tooltip behaviour ----------
+    function showTooltip(e, m) {
+      tooltip.innerHTML = `${escapeHtml(m.label)}<span class="sub">${escapeHtml(m.sub || '')}</span>`;
+      tooltip.classList.add('show');
+      moveTooltip(e);
+    }
+    function showTooltipForElement(el, m) {
+      const r = el.getBoundingClientRect();
+      tooltip.innerHTML = `${escapeHtml(m.label)}<span class="sub">${escapeHtml(m.sub || '')}</span>`;
+      tooltip.classList.add('show');
+      tooltip.style.left = (r.left + r.width / 2) + 'px';
+      tooltip.style.top  = r.top + 'px';
+    }
+    function moveTooltip(e) {
+      tooltip.style.left = e.clientX + 'px';
+      tooltip.style.top  = (e.clientY - 8) + 'px';
+    }
+    function hideTooltip() {
+      tooltip.classList.remove('show');
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      })[c]);
+    }
+
+    // ---------- ceiling spotlights drawn dynamically ----------
+    // 8 spotlights, evenly spaced, slightly randomized flicker phase
+    const SPOTLIGHT_COUNT = 8;
+    for (let i = 0; i < SPOTLIGHT_COUNT; i++) {
+      const s = document.createElement('div');
+      s.className = 'spotlight';
+      s.style.left = ((i + 0.5) * (100 / SPOTLIGHT_COUNT)) + 'vw';
+      s.style.animationDelay = (Math.random() * -4) + 's';
+      document.body.appendChild(s);
+    }
+  </script>
+</body>
+</html>
